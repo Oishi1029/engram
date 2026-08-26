@@ -15,9 +15,12 @@ secrets/
 __pycache__/
 *.py[cod]
 *.egg-info/
-.venv/
-venv/
-env/
+# Virtualenvs. NOTE: these are anchored with a leading slash on purpose — an
+# unanchored `env/` would also match the agent's `engram/env/` package and
+# silently drop it from the repo.
+/.venv/
+/venv/
+/env/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
