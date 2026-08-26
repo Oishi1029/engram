@@ -48,7 +48,7 @@ class Config:
 
     # --- 🔴 Hard safety caps. See module docstring. ---
     max_steps: int = _env_int("ENGRAM_MAX_STEPS", 15)
-    max_tool_calls: int = _env_int("ENGRAM_MAX_TOOL_CALLS", 20)
+    max_tool_calls: int = _env_int("ENGRAM_MAX_TOOL_CALLS", 25)
     max_retries: int = _env_int("ENGRAM_MAX_RETRIES", 2)
     max_tokens_per_run: int = _env_int("ENGRAM_MAX_TOKENS_PER_RUN", 250_000)
     run_timeout_seconds: int = _env_int("ENGRAM_RUN_TIMEOUT_SECONDS", 180)

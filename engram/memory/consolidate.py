@@ -130,9 +130,15 @@ def _parse_lessons(raw: str) -> list[dict[str, str]]:
     return out
 
 
-def consolidate(store: MemoryStore, limit: int | None = None) -> dict[str, Any]:
-    """Run one consolidation pass. Returns a summary suitable for logging or an HTTP response."""
-    episodes = store.unconsolidated_episodes(limit=limit)
+def consolidate(
+    store: MemoryStore, limit: int | None = None, run_ids: list[str] | None = None
+) -> dict[str, Any]:
+    """Run one consolidation pass. Returns a summary suitable for logging or an HTTP response.
+
+    `run_ids` restricts which runs are consolidated. See `MemoryStore.unconsolidated_episodes`
+    for why that matters: it is what stops the demo leaking an answer into its own measurement.
+    """
+    episodes = store.unconsolidated_episodes(limit=limit, run_ids=run_ids)
     if not episodes:
         return {"status": "nothing_to_consolidate", "episodes": 0, "lessons_written": 0}
 

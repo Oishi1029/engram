@@ -65,7 +65,17 @@ class MemoryStore:
             episode.episode_id
         ).set(episode.to_dict())
 
-    def unconsolidated_episodes(self, limit: int | None = None) -> list[Episode]:
+    def unconsolidated_episodes(
+        self, limit: int | None = None, run_ids: list[str] | None = None
+    ) -> list[Episode]:
+        """Episodes not yet consolidated, optionally restricted to specific runs.
+
+        `run_ids` exists for experimental hygiene, not convenience. In the demo the agent runs the
+        *same* incident twice — once cold as a control, once warm — and the control run writes
+        episodes like any other. Consolidating those would let the warm run learn the answer to the
+        very incident it is about to be measured on, which is a leak, not memory. Restricting
+        consolidation to the teaching run keeps the comparison honest.
+        """
         limit = limit or CONFIG.consolidation_batch
         docs = (
             self._db.collection(CONFIG.episodic_collection)
@@ -74,10 +84,13 @@ class MemoryStore:
             .stream()
         )
         out: list[Episode] = []
+        known = {f for f in Episode.__dataclass_fields__}
         for doc in docs:
             d = doc.to_dict() or {}
-            known = {f for f in Episode.__dataclass_fields__}
-            out.append(Episode(**{k: v for k, v in d.items() if k in known}))
+            ep = Episode(**{k: v for k, v in d.items() if k in known})
+            if run_ids is not None and ep.run_id not in run_ids:
+                continue
+            out.append(ep)
         return out
 
     def mark_consolidated(self, episode_ids: Iterable[str]) -> None:

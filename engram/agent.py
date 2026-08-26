@@ -1,13 +1,25 @@
 """The incident-response agent.
 
-The instruction below is written so that the agent behaves *correctly* with no memory — it
-investigates thoroughly and reaches the right answer eventually. That is deliberate and it is the
-honest way to run this experiment.
+🔴 THE METHODOLOGICAL DECISION THIS FILE EXISTS TO RECORD
+---------------------------------------------------------
+An earlier version of the instruction below told the agent, in the system prompt, that recent
+deploys are prime suspects, that a degraded dependency may be a symptom rather than a cause, and
+that it should diff a service's `_previous` config block.
 
-It would be trivial to cripple the memoryless agent and manufacture a large improvement. The
-resulting number would be worthless, and any judge who reads the prompt would see it. So the cold
-run gets a competent agent, and the second run has to earn its margin by *actually knowing where
-to look* rather than by being handed an opponent with one hand tied.
+Those are exactly the lessons consolidation is supposed to DISCOVER FROM EXPERIENCE. Putting them
+in the base prompt hands the agent its memory for free, leaves nothing for the memory system to
+contribute, and makes any measured improvement meaningless. The first live run exposed it: the
+memoryless agent solved the incident in seven tool calls and never touched the red herring,
+because it had been told in advance where to look.
+
+The instruction is therefore now deliberately DOMAIN-NAIVE. The agent is a capable reasoner with
+full tool access and no free heuristics — it must work out an investigation strategy itself, and
+a naive strategy is what costs it steps on the red herring.
+
+The opposite failure would be just as dishonest: crippling the memoryless agent to manufacture a
+large delta. It is not crippled. It has the same model, the same tools, the same budget and the
+same task. The only difference between a cold and a warm run is the memory block prepended below.
+That single isolated variable is what makes the comparison worth putting on camera.
 """
 
 from __future__ import annotations
@@ -18,48 +30,33 @@ from google.genai import types
 from engram.config import CONFIG
 
 INSTRUCTION = """\
-You are an experienced site-reliability engineer on call. You have been handed a live production
-incident and you must find its ROOT CAUSE and propose a remediation.
+You are a site-reliability engineer on call. You have been handed a live production incident in a
+microservice estate. Your job is to find its ROOT CAUSE and propose a concrete remediation.
 
-HOW TO INVESTIGATE
-
-Work from evidence, not from the first plausible story. In a distributed system the service that
-reports the symptom is frequently NOT the service that contains the cause.
-
-A discipline that repeatedly pays off:
-  - Anything that changed recently is a prime suspect. Deploys and configuration changes cause
-    most incidents.
-  - Distinguish a CAUSE from a SYMPTOM. A dependency can look degraded simply because its caller
-    is holding connections open. Check whether a service's own internal health — its error rate,
-    its CPU, its server-side latency — is actually bad, or whether only the latency *observed by
-    its callers* is bad. Those mean very different things.
-  - Read the logs of the service reporting the symptom before ranging further afield. They often
-    name the failing subsystem outright.
-  - When a deploy is implicated, compare the configuration before and after it. The `_previous`
-    block in a service's config shows what the deploy changed.
+You have tools that let you inspect the estate. Use them to gather evidence, and reason from the
+evidence you actually gather rather than from the first plausible story.
 
 BUDGET
-You have a limited number of tool calls. Be systematic, not exhaustive. Do not investigate every
-service in the estate — follow the evidence.
+You have a limited number of tool calls, so choose each one deliberately. Do not sweep every
+service in the estate.
 
 FINISHING
-When the evidence supports a conclusion, call `propose_remediation` exactly once with the service
-where the cause actually lives, the causal chain, and a concrete fix. Do not call it speculatively,
-and do not stop without calling it.
+When the evidence supports a conclusion, call `propose_remediation` exactly once, naming the
+service where the cause actually lives, the causal chain, and a concrete fix. Do not call it
+speculatively, and do not stop without calling it.
 
-Before each tool call, state in one short sentence what you are checking and why. Those sentences
-are recorded as the agent's episodic memory, so make them substantive: name the hypothesis you are
-testing, not merely the action you are taking.
+Before each tool call, state in one short sentence what you are checking and why — name the
+hypothesis you are testing, not merely the action you are taking. Those sentences become the
+agent's episodic record, so make them substantive.
 """
 
 
 def build_agent(tools: list, memory_block: str) -> LlmAgent:
     """Construct the agent for one run.
 
-    `memory_block` is prepended to the instruction. On a cold run it says the memory is empty; on a
-    warm run it carries the consolidated lessons. That single substitution is the entire difference
-    between the two runs — same model, same tools, same instruction, same incident-independent
-    prompt. Keeping the variable isolated is what makes the comparison meaningful.
+    `memory_block` is prepended to the instruction. On a cold run it states that memory is empty;
+    on a warm run it carries the consolidated lessons. That substitution is the entire difference
+    between the two runs — same model, same tools, same instruction, same incident.
     """
     return LlmAgent(
         name="incident_responder",
