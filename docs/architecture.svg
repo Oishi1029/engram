@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1000" viewBox="0 0 1680 1000" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3c4043"/></marker>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1a73e8"/></marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#137333"/></marker>
+    <marker id="ay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b06000"/></marker>
+  </defs>
+  <rect width="1680" height="1000" fill="#ffffff"/>
+
+  <text x="56" y="52" font-size="29" font-weight="600" fill="#202124">engram — a long-horizon task agent with durable, consolidating memory</text>
+  <text x="56" y="82" font-size="16" fill="#5f6368">Autonomous incident response on Google Cloud. Episodic experience is consolidated out of band into transferable operating rules, then recalled progressively as evidence accumulates.</text>
+
+  <rect x="40" y="106" width="1600" height="826" rx="16" fill="#f8f9fa" stroke="#dadce0" stroke-width="2"/>
+  <text x="62" y="134" font-size="14" font-weight="700" fill="#5f6368" letter-spacing="1.2">GOOGLE CLOUD  ·  single project  ·  Cloud Run + Firestore in asia-southeast1  ·  Vertex AI on the global endpoint</text>
+
+  <!-- ============ HOT PATH ============ -->
+  <rect x="70" y="152" width="1110" height="424" rx="12" fill="#ffffff" stroke="#1a73e8" stroke-width="2"/>
+  <text x="90" y="180" font-size="13.5" font-weight="700" fill="#1a73e8" letter-spacing="1.1">HOT PATH — one incident, the agent's critical path</text>
+
+  <rect x="94" y="196" width="726" height="364" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+  <text x="114" y="223" font-size="16" font-weight="700" fill="#174ea6">Cloud Run · service “engram”</text>
+  <text x="114" y="243" font-size="12" fill="#5f6368">FastAPI · scale-to-zero · max-instances 2</text>
+
+  <rect x="114" y="256" width="296" height="158" rx="8" fill="#ffffff" stroke="#1a73e8" stroke-width="1.3"/>
+  <text x="130" y="280" font-size="15" font-weight="700" fill="#202124">Google ADK</text>
+  <text x="130" y="300" font-size="13" fill="#202124">LlmAgent “incident_responder”</text>
+  <text x="130" y="322" font-size="11.5" fill="#5f6368">instruction is domain-naive —</text>
+  <text x="130" y="338" font-size="11.5" fill="#5f6368">no heuristics handed to it, so the</text>
+  <text x="130" y="354" font-size="11.5" fill="#5f6368">lessons must come from memory</text>
+  <rect x="130" y="366" width="264" height="30" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.2"/>
+  <text x="140" y="386" font-size="11.5" font-weight="700" fill="#a06000">before_model_callback → recall</text>
+
+  <rect x="430" y="256" width="370" height="158" rx="8" fill="#ffffff" stroke="#1a73e8" stroke-width="1.3"/>
+  <text x="448" y="280" font-size="15" font-weight="700" fill="#202124">Tool surface  (7)</text>
+  <text x="448" y="302" font-size="11.5" fill="#5f6368">list_services · get_service_metrics</text>
+  <text x="448" y="320" font-size="11.5" fill="#5f6368">search_logs · get_recent_deploys</text>
+  <text x="448" y="338" font-size="11.5" fill="#5f6368">get_service_config · get_dependencies</text>
+  <rect x="448" y="352" width="334" height="46" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+  <text x="458" y="371" font-size="12" font-weight="700" fill="#c5221f">apply_remediation → TAKES ACTION</text>
+  <text x="458" y="389" font-size="11" fill="#a50e0e">returns what actually happened, incl. damage</text>
+
+  <rect x="430" y="430" width="370" height="112" rx="8" fill="#ffffff" stroke="#dadce0" stroke-width="1.3"/>
+  <text x="448" y="453" font-size="13.5" font-weight="700" fill="#202124">Synthetic estate — 10 services, 2 incidents</text>
+  <text x="448" y="474" font-size="11.5" fill="#5f6368">Both are noisy-neighbour contention: a sibling’s</text>
+  <text x="448" y="491" font-size="11.5" fill="#5f6368">deploy drains a shared datastore’s pool.</text>
+  <text x="448" y="512" font-size="11.5" font-weight="600" fill="#202124">Zero surface detail in common —</text>
+  <text x="448" y="529" font-size="11.5" font-weight="600" fill="#202124">so transfer is generalisation, not recall.</text>
+
+  <rect x="850" y="256" width="306" height="182" rx="10" fill="#e6f4ea" stroke="#137333" stroke-width="1.8"/>
+  <text x="870" y="284" font-size="16" font-weight="700" fill="#0d652d">Vertex AI</text>
+  <text x="870" y="308" font-size="14" font-weight="600" fill="#202124">gemini-3.7-flash</text>
+  <text x="870" y="330" font-size="11.5" fill="#5f6368">global endpoint · GA 13 Aug 2026</text>
+  <text x="870" y="348" font-size="11.5" fill="#5f6368">satisfies “Gemini 3.5 or newer”</text>
+  <text x="870" y="372" font-size="11" fill="#a50e0e">Gemini Pro tops out at 3.1 →</text>
+  <text x="870" y="388" font-size="11" fill="#a50e0e">no Pro model is compliant</text>
+  <text x="870" y="412" font-size="11.5" fill="#5f6368">Vertex, not AI Studio: keeps calls</text>
+  <text x="870" y="428" font-size="11.5" fill="#5f6368">in-project and credit-eligible</text>
+
+  <text x="850" y="472" font-size="12.5" font-weight="700" fill="#1a73e8">hard caps — a cost control, not tuning</text>
+  <text x="850" y="493" font-size="11.5" fill="#5f6368">25 tool calls · 250k tokens · 2 retries · 180 s</text>
+  <text x="850" y="512" font-size="11.5" fill="#5f6368">no unbounded loop anywhere in the agent</text>
+
+  <!-- ============ BACKGROUND ============ -->
+  <rect x="1210" y="152" width="404" height="424" rx="12" fill="#ffffff" stroke="#137333" stroke-width="2"/>
+  <text x="1230" y="180" font-size="13.5" font-weight="700" fill="#137333" letter-spacing="1.1">BACKGROUND — off the critical path</text>
+
+  <rect x="1230" y="196" width="364" height="92" rx="10" fill="#e6f4ea" stroke="#137333" stroke-width="1.5"/>
+  <text x="1248" y="223" font-size="15.5" font-weight="700" fill="#0d652d">Cloud Scheduler</text>
+  <text x="1248" y="246" font-size="11.5" fill="#5f6368">periodic POST → /consolidate</text>
+  <text x="1248" y="268" font-size="11.5" font-weight="600" fill="#202124">the agent never waits for this</text>
+
+  <rect x="1230" y="308" width="364" height="252" rx="10" fill="#ffffff" stroke="#137333" stroke-width="1.5"/>
+  <text x="1248" y="335" font-size="15.5" font-weight="700" fill="#202124">Consolidation pass</text>
+  <text x="1248" y="357" font-size="11.5" fill="#5f6368">Gemini 3.7 Flash reads raw episodes</text>
+  <text x="1248" y="374" font-size="11.5" fill="#5f6368">and distils durable operating rules.</text>
+  <text x="1248" y="400" font-size="12" font-weight="700" fill="#202124">A lesson may name no service —</text>
+  <text x="1248" y="417" font-size="12" font-weight="700" fill="#202124">or it cannot transfer.</text>
+  <text x="1248" y="443" font-size="11.5" fill="#5f6368">An outcome VERDICT is authoritative:</text>
+  <text x="1248" y="460" font-size="11.5" fill="#5f6368">a fix that cleared the symptom but</text>
+  <text x="1248" y="477" font-size="11.5" fill="#5f6368">broke something is recorded WRONG.</text>
+  <text x="1248" y="501" font-size="11" fill="#a50e0e">(without this the model anchors on</text>
+  <text x="1248" y="517" font-size="11" fill="#a50e0e">“symptom cleared” and inverts it)</text>
+  <text x="1248" y="543" font-size="12" font-weight="600" fill="#137333">then: salience decay + eviction</text>
+
+  <!-- ============ FIRESTORE ============ -->
+  <rect x="70" y="646" width="1544" height="252" rx="12" fill="#fef7e0" stroke="#f9ab00" stroke-width="2"/>
+  <text x="1594" y="678" font-size="16" font-weight="700" fill="#a06000" text-anchor="end">Firestore (native mode) · durable memory</text>
+
+  <rect x="94" y="694" width="486" height="182" rx="9" fill="#ffffff" stroke="#f9ab00" stroke-width="1.4"/>
+  <text x="114" y="720" font-size="15" font-weight="700" fill="#202124">episodes — what happened</text>
+  <text x="114" y="743" font-size="11.5" fill="#5f6368">one document per step: stated rationale, tool,</text>
+  <text x="114" y="760" font-size="11.5" fill="#5f6368">arguments, observation, and outcome text</text>
+  <text x="114" y="784" font-size="11.5" fill="#5f6368">high volume · cheap · individually low value</text>
+  <text x="114" y="810" font-size="11.5" font-weight="600" fill="#202124">never retrieved at planning time —</text>
+  <text x="114" y="827" font-size="11.5" font-weight="600" fill="#202124">it exists to be consolidated from</text>
+  <text x="114" y="853" font-size="11" fill="#5f6368">(and to make the run auditable on camera)</text>
+
+  <rect x="604" y="694" width="486" height="182" rx="9" fill="#ffffff" stroke="#f9ab00" stroke-width="1.4"/>
+  <text x="624" y="720" font-size="15" font-weight="700" fill="#202124">semantic_memory — what was learned</text>
+  <text x="624" y="743" font-size="11.5" fill="#5f6368">WHEN ⟨situation⟩ → THEN ⟨operating rule⟩</text>
+  <text x="624" y="766" font-size="11.5" fill="#5f6368">salience rises on use, decays otherwise;</text>
+  <text x="624" y="783" font-size="11.5" fill="#5f6368">evicted below a floor, store capped at 200</text>
+  <text x="624" y="809" font-size="11.5" font-weight="700" fill="#a06000">forgetting is load-bearing: without it</text>
+  <text x="624" y="826" font-size="11.5" font-weight="700" fill="#a06000">precision falls and run N+2 gets worse</text>
+  <text x="624" y="852" font-size="11" fill="#5f6368">the only tier read on the hot path</text>
+
+  <rect x="1114" y="694" width="480" height="182" rx="9" fill="#ffffff" stroke="#f9ab00" stroke-width="1.4"/>
+  <text x="1134" y="720" font-size="15" font-weight="700" fill="#202124">runs — the measurement</text>
+  <text x="1134" y="743" font-size="11.5" fill="#5f6368">tool calls · wall time · tokens · dead-end steps</text>
+  <text x="1134" y="760" font-size="11.5" fill="#5f6368">diagnosis correct · remediation correct · resolved</text>
+  <rect x="1134" y="774" width="440" height="88" rx="6" fill="#e6f4ea" stroke="#137333" stroke-width="1.3"/>
+  <text x="1148" y="796" font-size="12.5" font-weight="700" fill="#0d652d">measured — same incident, n=5 per arm</text>
+  <text x="1148" y="818" font-size="13" font-weight="700" fill="#202124">incident resolved   0/5  →  5/5</text>
+  <text x="1148" y="837" font-size="12" fill="#202124">tool calls −31%  ·  tokens −32%</text>
+  <text x="1148" y="854" font-size="12" fill="#202124">dead-end steps −100%  ·  diagnosis 5/5 both</text>
+
+  <!-- ============ ARROWS ============ -->
+  <path d="M 820 320 L 844 320" stroke="#1a73e8" stroke-width="2.6" fill="none" marker-end="url(#ab)" marker-start="url(#ab)"/>
+
+  <path d="M 170 414 L 170 688" stroke="#3c4043" stroke-width="2.2" fill="none" marker-end="url(#a)"/>
+  <text x="182" y="612" font-size="12.5" font-weight="700" fill="#3c4043">① write every step</text>
+
+  <path d="M 700 690 L 700 600 L 300 600 L 300 418" stroke="#b06000" stroke-width="2.6" fill="none" marker-end="url(#ay)"/>
+  <text x="320" y="592" font-size="12.5" font-weight="700" fill="#b06000">④ progressive recall — re-queried before EVERY planning step, cued by the evidence gathered so far</text>
+
+  <path d="M 300 880 L 300 936 L 1652 936 L 1652 434 L 1600 434" stroke="#137333" stroke-width="2.2" fill="none" marker-end="url(#ag)" stroke-dasharray="7 5"/>
+  <text x="700" y="928" font-size="12.5" font-weight="700" fill="#137333">② read raw episodes asynchronously — the agent's latency is untouched by this</text>
+
+  <path d="M 1230 500 L 1196 500 L 1196 620 L 900 620 L 900 690" stroke="#137333" stroke-width="2.2" fill="none" marker-end="url(#ag)" stroke-dasharray="7 5"/>
+  <text x="916" y="612" font-size="12.5" font-weight="700" fill="#137333">③ write durable lessons</text>
+
+  <path d="M 1230 356 L 1162 356" stroke="#137333" stroke-width="1.8" fill="none" marker-end="url(#ag)" stroke-dasharray="4 4"/>
+
+  <text x="56" y="968" font-size="13" fill="#5f6368">Mandated stack — Gemini 3.7 Flash via <tspan font-weight="700" fill="#202124">Vertex AI</tspan>  ·  <tspan font-weight="700" fill="#202124">Google ADK</tspan> agent framework  ·  <tspan font-weight="700" fill="#202124">Cloud Run</tspan>, <tspan font-weight="700" fill="#202124">Firestore</tspan> and <tspan font-weight="700" fill="#202124">Cloud Scheduler</tspan> infrastructure.      Category: The Taskmaster.      github.com/Oishi1029/engram</text>
+</svg>

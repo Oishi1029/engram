@@ -102,14 +102,26 @@ async def main(wipe: bool) -> int:
             "lower",
         ),
         (
-            "root cause correct",
+            "diagnosis correct",
             "YES" if baseline["correct"] else "NO",
             "YES" if warm["correct"] else "NO",
             "",
         ),
+        (
+            "remediation chosen",
+            baseline.get("chosen_remediation") or "(none)",
+            warm.get("chosen_remediation") or "(none)",
+            "",
+        ),
+        (
+            "INCIDENT RESOLVED",
+            "YES" if baseline.get("resolved") else "NO",
+            "YES" if warm.get("resolved") else "NO",
+            "",
+        ),
     ]
-    print(f"  {'metric':<24}{'COLD':>12}{'WARM':>12}{'change':>14}")
-    print(f"  {'-' * 62}")
+    print(f"  {'metric':<24}{'COLD':>30}{'WARM':>30}{'change':>10}")
+    print(f"  {'-' * 94}")
     for name, cold, hot, better in rows:
         if better == "lower" and isinstance(cold, (int, float)) and isinstance(hot, (int, float)):
             if cold:
@@ -118,9 +130,13 @@ async def main(wipe: bool) -> int:
                 delta = "n/a" if hot == 0 else f"+{hot}"
         else:
             delta = ""
-        print(f"  {name:<24}{cold!s:>12}{hot!s:>12}{delta:>14}")
+        print(f"  {name:<24}{cold!s:>30}{hot!s:>30}{delta:>10}")
 
-    print(f"\n  memories in context on the warm run: {warm['memories_used_count']}")
+    print(f"\n  memories recalled on the warm run: {warm['memories_used_count']}")
+    if baseline.get("outcome"):
+        print(f"\n  COLD outcome: {baseline['outcome'].splitlines()[0]}")
+    if warm.get("outcome"):
+        print(f"  WARM outcome: {warm['outcome'].splitlines()[0]}")
     print(f"  cold path: {' -> '.join(baseline['services_investigated'])}")
     print(f"  warm path: {' -> '.join(warm['services_investigated'])}")
     print(BAR)

@@ -7,7 +7,8 @@ Three jobs:
     agent's critical path.
   * `/` renders a live view of the memory store, so the deployment is inspectable in a browser —
     which is the "hosted project URL" the submission needs.
-  * `/healthz` for Cloud Run.
+  * `/health` for Cloud Run. NOTE: not `/healthz` — Cloud Run's frontend returns its own
+    404 page for that path before the request ever reaches the container.
 """
 
 from __future__ import annotations
@@ -49,8 +50,8 @@ class ConsolidateRequest(BaseModel):
     limit: int | None = None
 
 
-@app.get("/healthz")
-def healthz() -> dict:
+@app.get("/health")
+def health() -> dict:
     return {"ok": True, "model": CONFIG.model, "project": CONFIG.project_id}
 
 
@@ -154,7 +155,7 @@ def index() -> HTMLResponse:
 
 <p style="opacity:.65;font-size:13px">
 POST <code>/run</code> · POST <code>/consolidate</code> · GET <code>/memory</code> ·
-GET <code>/runs</code> · GET <code>/healthz</code></p>
+GET <code>/runs</code> · GET <code>/health</code></p>
 """)
 
 
