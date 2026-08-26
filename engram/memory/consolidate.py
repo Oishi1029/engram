@@ -144,6 +144,16 @@ def _client() -> genai.Client:
         vertexai=True,
         project=CONFIG.require_project(),
         location=CONFIG.location,
+        http_options=types.HttpOptions(
+            retry_options=types.HttpRetryOptions(
+                attempts=CONFIG.retry_attempts,
+                initial_delay=CONFIG.retry_initial_delay,
+                max_delay=CONFIG.retry_max_delay,
+                exp_base=2.0,
+                jitter=1.0,
+                http_status_codes=[429, 500, 502, 503, 504],
+            )
+        ),
     )
 
 

@@ -46,6 +46,15 @@ class Config:
     semantic_collection: str = "semantic_memory"
     runs_collection: str = "runs"
 
+    # --- Transient-failure retry ---
+    # Vertex AI returns 429 RESOURCE_EXHAUSTED under burst load. Observed live: several concurrent
+    # agents saturated the burst quota and a run died mid-flight, recovering ~15s later. Unhandled,
+    # that ends a demo recording or a judge's reproduction on an error that was never a real fault.
+    # Retries happen at the transport layer so a single step is retried, not the whole run.
+    retry_attempts: int = _env_int("ENGRAM_RETRY_ATTEMPTS", 5)
+    retry_initial_delay: float = 2.0
+    retry_max_delay: float = 60.0
+
     # --- 🔴 Hard safety caps. See module docstring. ---
     max_steps: int = _env_int("ENGRAM_MAX_STEPS", 15)
     max_tool_calls: int = _env_int("ENGRAM_MAX_TOOL_CALLS", 25)

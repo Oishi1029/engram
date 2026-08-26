@@ -63,6 +63,29 @@ def describe(values: list[float]) -> str:
     )
 
 
+
+def assert_control_arm_is_quarantined(store: MemoryStore, cold_runs: list) -> None:
+    """Fail loudly if any control-arm episode is eligible for consolidation.
+
+    This invariant is the difference between a measurement and a circular one, and it has already
+    been violated once in production: the Cloud Scheduler job posts an empty body, which took the
+    unfiltered consolidation path and swept control-arm episodes into semantic memory on the live
+    service. Nothing failed. The store simply grew, and several new lessons stated the test
+    incident's answer outright.
+
+    It is enforced structurally now (control-arm episodes are written ineligible), but a silent
+    regression here would quietly invalidate every number this script prints, so it is also checked
+    at runtime rather than trusted.
+    """
+    ids = {r["run_id"] for r in cold_runs}
+    leaked = [e for e in store.unconsolidated_episodes(limit=500) if e.run_id in ids]
+    if leaked:
+        raise SystemExit(
+            f"ABORT: {len(leaked)} control-arm episodes are eligible for consolidation. "
+            "The warm arm would learn the answer to its own measurement. Results discarded."
+        )
+    print(f"  guard: 0 of {len(ids)} control runs are eligible for consolidation \u2713")
+
 async def arm(name: str, n: int, store: MemoryStore, use_memory: bool) -> list[dict[str, Any]]:
     out = []
     for i in range(1, n + 1):
@@ -87,6 +110,7 @@ async def main(n: int) -> int:
     cold = await arm("cold", n, store, use_memory=False)
 
     print(f"\nTEACH — one run of {TEACH}, then consolidate that run only")
+    assert_control_arm_is_quarantined(store, cold)
     teach = await run_incident(TEACH, store=store, use_memory=True, verbose=False)
     print(f"  {TEACH}: {teach['tool_calls']} calls, correct={teach['correct']}")
     summary = consolidate(store, run_ids=[teach["run_id"]])

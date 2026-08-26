@@ -164,6 +164,14 @@ async def run_incident(
                                 tool=pending["tool"],
                                 tool_args=pending["args"],
                                 observation_summary=_summarise_response(response),
+                                # A memory-disabled run is a CONTROL by definition — you only
+                                # disable memory to measure against it. Marking it consolidated at
+                                # WRITE time makes it permanently ineligible for consolidation, no
+                                # matter what any caller later asks for. Relying on callers to pass
+                                # run_ids was not enough: the Cloud Scheduler job posts an empty
+                                # body, which took the unfiltered path and poisoned the live store.
+                                control_run=not use_memory,
+                                consolidated=not use_memory,
                             )
                         )
 

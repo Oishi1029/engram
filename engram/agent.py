@@ -25,9 +25,31 @@ That single isolated variable is what makes the comparison worth putting on came
 from __future__ import annotations
 
 from google.adk.agents import LlmAgent
+from google.adk.models import Gemini
 from google.genai import types
 
 from engram.config import CONFIG
+
+
+def _model() -> Gemini:
+    """The model, with transport-level retry on transient failures.
+
+    Vertex AI returns 429 RESOURCE_EXHAUSTED under burst load, and ADK surfaces it as a hard error
+    that ends the run. Retrying inside the transport retries the single failing step rather than
+    discarding an investigation that was going fine — which matters most in the two situations
+    where a lost run is expensive: recording an unedited demo, and a judge reproducing the result.
+    """
+    return Gemini(
+        model=CONFIG.model,
+        retry_options=types.HttpRetryOptions(
+            attempts=CONFIG.retry_attempts,
+            initial_delay=CONFIG.retry_initial_delay,
+            max_delay=CONFIG.retry_max_delay,
+            exp_base=2.0,
+            jitter=1.0,
+            http_status_codes=[429, 500, 502, 503, 504],
+        ),
+    )
 
 INSTRUCTION = """\
 You are a site-reliability engineer on call. You have been handed a live production incident in a
@@ -66,7 +88,7 @@ def build_agent(tools: list, before_model_callback) -> LlmAgent:
     """
     return LlmAgent(
         name="incident_responder",
-        model=CONFIG.model,
+        model=_model(),
         description="Investigates a production incident and proposes a remediation.",
         instruction=INSTRUCTION,
         tools=tools,
