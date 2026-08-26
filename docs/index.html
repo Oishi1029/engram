@@ -54,7 +54,7 @@ person would accept.</p>
 
 <p>My initial design had the agent diagnose the root cause of an incident, and I measured whether
 memory made it faster. The answer was: a bit. Around 13% fewer tool calls, with both arms getting
-the diagnosis right five times out of five.</p>
+the diagnosis right every single time.</p>
 
 <p>13% sounds like a result until you look at the variance. Cold runs on identical input ranged from
 8 to 19 tool calls. The effect was comfortably inside the noise.</p>
@@ -85,18 +85,23 @@ must restart from zero.</li>
 <p>The environment never reveals the two facts that decide it: that the interrupted job is **non-resumable**, and that change control **rejects** expanding shared capacity. Both are consequences you can only learn by having acted before — and empirically the memoryless agent had the campaign-start log line in context in all five trials and still chose rollback all five times. You can only know by having
 done it before.</p>
 
-<p>The memoryless agent chose rollback <span class="bad">5/5</span> &mdash; the textbook instinct
+<p>The memoryless agent chose rollback <span class="bad">10/10</span> &mdash; the textbook instinct
 &mdash; destroying a 4.8-million-recipient campaign send every time. With memory consolidated from
 <em>one prior incident on entirely different services</em>, it chose the in-place fix
-<span class="good">5/5</span>.</p>
+<span class="good">10/10</span>.</p>
 
 <table>
-<tr><th>metric</th><th>cold</th><th>warm</th><th>&Delta;</th></tr>
-<tr><td><strong>incident resolved</strong></td><td class="bad">0 / 5</td><td class="good">5 / 5</td><td>&mdash;</td></tr>
-<tr><td>tool calls</td><td>12.8 &plusmn; 3.8</td><td>8.8 &plusmn; 0.8</td><td>&minus;31%</td></tr>
-<tr><td>total tokens</td><td>36,475</td><td>24,628</td><td>&minus;32%</td></tr>
-<tr><td>diagnosis correct</td><td>5 / 5</td><td>5 / 5</td><td>&mdash;</td></tr>
+<tr><th>metric</th><th>cold (n=10)</th><th>warm (n=10)</th><th>&Delta;</th></tr>
+<tr><td><strong>incident resolved</strong></td><td class="bad">0 / 10</td><td class="good">10 / 10</td><td>&mdash;</td></tr>
+<tr><td>tool calls</td><td>11.7 &plusmn; 3.1</td><td>9.0 &plusmn; 0.8</td><td>&minus;23%</td></tr>
+<tr><td>total tokens</td><td>32,686</td><td>25,139</td><td>&minus;23%</td></tr>
+<tr><td>diagnosis correct</td><td>10 / 10</td><td>10 / 10</td><td>&mdash;</td></tr>
 </table>
+
+<p>Two independent runs of five trials each. The warm arm returned a mean of <em>exactly 9.0 tool
+calls in both</em>; the cold arm moved by more than two between them. Run 1 alone would have
+supported a &minus;31% headline and run 2 alone &minus;15%, which is why both are reported rather
+than the flattering one. The resolution row never varied.</p>
 
 <p>Note the last row. I&rsquo;m not going to claim memory helps the agent find the answer &mdash; it
 demonstrably doesn&rsquo;t need help. That row staying flat is what makes the first row mean

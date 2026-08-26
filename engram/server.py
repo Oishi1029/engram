@@ -172,11 +172,11 @@ def index() -> HTMLResponse:
 {mem_rows}</table>
 
 <div class="headline">
-<b>Measured: incident resolved 0/5 &rarr; 5/5 with memory.</b><br>
-Both arms diagnose the root cause correctly 5/5 &mdash; the model is strong and memory cannot claim
+<b>Measured over 20 trials: incident resolved 0/10 &rarr; 10/10 with memory.</b><br>
+Both arms diagnose the root cause correctly 10/10 &mdash; the model is strong and memory cannot claim
 credit for that. The difference is what each one then <i>does</i>: without memory it rolls back the
-offending deploy, which clears the symptom and destroys an in-flight job. Tool calls &minus;31%,
-tokens &minus;32%.
+offending deploy, which clears the symptom and destroys an in-flight job. Tool calls &minus;23%,
+tokens &minus;23%, dead-end steps &minus;100%.
 <a href="https://github.com/Oishi1029/engram/blob/main/results/benchmark-2026-08-26.md">Full protocol and caveats &rarr;</a>
 </div>
 

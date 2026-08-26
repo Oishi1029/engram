@@ -16,25 +16,29 @@ and then handles a *different* incident measurably better because of it.
 
 ## The result
 
-Same incident, five trials per arm. The only variable is whether memory is enabled.
+Same incident, **two independent runs of five trials per arm (n=10)**. The only variable is
+whether memory is enabled.
 
 | metric | COLD (no memory) | WARM (memory) | Δ |
 |---|---|---|---|
-| **incident fully resolved** | **0 / 5** | **5 / 5** | — |
-| remediation chosen | `rollback_deploy` ×5 | `reduce_client_pool_in_place` ×5 | — |
-| tool calls | 12.8 ± 3.8 | 8.8 ± 0.8 | **−31 %** |
-| wall seconds | 45.0 ± 9.7 | 32.5 ± 3.0 | −28 % |
-| total tokens | 36,475 ± 12,844 | 24,628 ± 2,285 | −32 % |
-| steps spent on the red herring | 0.4 | 0.0 | −100 % |
-| root cause diagnosed correctly | 5 / 5 | 5 / 5 | — |
+| **incident fully resolved** | **0 / 10** | **10 / 10** | — |
+| remediation chosen | `rollback_deploy` ×10 | `reduce_client_pool_in_place` ×10 | — |
+| tool calls | 11.7 ± 3.1 | 9.0 ± 0.8 | **−23 %** |
+| wall seconds | 53.6 ± 13.6 | 42.1 ± 14.8 | −21 % |
+| total tokens | 32,686 ± 10,355 | 25,139 ± 2,754 | −23 % |
+| steps spent on the red herring | 0.3 | 0.0 | −100 % |
+| root cause diagnosed correctly | 10 / 10 | 10 / 10 | — |
 
 Full protocol, per-trial data and caveats: [`results/benchmark-2026-08-26.md`](results/benchmark-2026-08-26.md).
 
 ### Reading that table honestly
 
-**Diagnosis is 5/5 in both arms.** Gemini 3.7 Flash finds the root cause reliably with no memory at
+**Diagnosis is 10/10 in both arms.** Gemini 3.7 Flash finds the root cause reliably with no memory at
 all. Any claim that memory helps it *find* the answer would be overstated — the honest
-search-efficiency result is −31 % on steps, and a much larger collapse in variance (±3.8 → ±0.8).
+search-efficiency result is −23 % on steps, and a much larger collapse in variance (±3.1 → ±0.8).
+The warm arm returned a mean of **exactly 9.0 tool calls in both independent runs** while the cold
+arm moved by more than two; single-run deltas ranged from −15 % to −31 %, which is why both runs are
+reported. The resolution result did not vary at all.
 
 **The categorical result is the remediation**, and it comes from a deliberate design decision.
 
@@ -46,9 +50,9 @@ to **choose and apply a fix** — and which fix is correct is *not* in the envir
 * `reduce_client_pool_in_place` clears it just as fast and lets the job finish.
 
 The environment never reveals the two facts that decide it: that the interrupted job is **non-resumable**, and that change control **rejects** expanding shared capacity. Both are consequences you can only learn by having acted before — and empirically the memoryless agent had the campaign-start log line in context in all five trials and still chose rollback all five times. The cold agent chose rollback
-5/5 — the textbook instinct — destroying a 4.8 M-recipient campaign send every time. The warm agent
-chose the in-place fix 5/5, having learned from **one prior incident on entirely different services**
-what the rollback cost.
+**10/10** — the textbook instinct — destroying a 4.8 M-recipient campaign send every time. The warm
+agent chose the in-place fix **10/10**, having learned from **one prior incident on entirely
+different services** what the rollback cost.
 
 That is the claim: **memory is not a faster index over what the agent could already work out. It is
 the only route to knowledge the environment never exposes.**
