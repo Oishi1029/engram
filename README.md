@@ -28,7 +28,7 @@ Same incident, five trials per arm. The only variable is whether memory is enabl
 | steps spent on the red herring | 0.4 | 0.0 | −100 % |
 | root cause diagnosed correctly | 5 / 5 | 5 / 5 | — |
 
-Full protocol, caveats and raw trial data: [`results/benchmark-2026-08-26.md`](results/benchmark-2026-08-26.md).
+Full protocol, per-trial data and caveats: [`results/benchmark-2026-08-26.md`](results/benchmark-2026-08-26.md).
 
 ### Reading that table honestly
 
@@ -45,7 +45,7 @@ to **choose and apply a fix** — and which fix is correct is *not* in the envir
 * `rollback_deploy` clears the symptom **and terminates an in-flight job** that must restart from zero.
 * `reduce_client_pool_in_place` clears it just as fast and lets the job finish.
 
-Nothing in the metrics, logs, configs or topology distinguishes them. The cold agent chose rollback
+The environment never reveals the two facts that decide it: that the interrupted job is **non-resumable**, and that change control **rejects** expanding shared capacity. Both are consequences you can only learn by having acted before — and empirically the memoryless agent had the campaign-start log line in context in all five trials and still chose rollback all five times. The cold agent chose rollback
 5/5 — the textbook instinct — destroying a 4.8 M-recipient campaign send every time. The warm agent
 chose the in-place fix 5/5, having learned from **one prior incident on entirely different services**
 what the rollback cost.
@@ -256,9 +256,11 @@ error**, and each would have shipped as "memory doesn't help much":
 
 Three guards exist to keep the result honest, and none may be traded away for a bigger number:
 
-* The agent's system prompt is **domain-naive** — it is never told that deploys are prime suspects
-  or that a degraded dependency may be a symptom. Those are exactly the lessons memory must supply.
-  Crippling the memoryless agent would manufacture a large delta and a worthless number.
+* The agent is never handed **the lesson memory exists to supply**: nothing in its prompt or tools
+  says that a rollback has a cost, or which remediation to prefer. Both arms see byte-identical
+  instructions and tool descriptions — the memory block is the only difference. (The tools *do*
+  describe what they return, including that config carries a `_previous` block; that is shared
+  equally by both arms, and stripping it would cripple the memoryless agent and inflate the delta.)
 * **Consolidation never sees the control arm's episodes**, or the warm run would learn the answer to
   its own measurement.
 * **The teaching incident shares no surface detail with the test incident** — different service,
@@ -271,12 +273,12 @@ Three guards exist to keep the result honest, and none may be traded away for a 
 ```
 engram/
 ├── engram/
-│   ├── agent.py              ADK LlmAgent; the domain-naive instruction
+│   ├── agent.py              ADK LlmAgent; the instruction, identical in both arms
 │   ├── runner.py             one instrumented run, hard caps, grading
 │   ├── server.py             Cloud Run service
 │   ├── config.py             model IDs and the safety caps
 │   ├── env/
-│   │   ├── fixtures.py       synthetic estate, 2 incidents, remediation outcomes
+│   │   ├── fixtures.py       synthetic estate (14 services), 2 incidents, remediation outcomes
 │   │   └── tools.py          the 7 tools, incl. apply_remediation
 │   └── memory/
 │       ├── records.py        pure dataclasses, no cloud dependency

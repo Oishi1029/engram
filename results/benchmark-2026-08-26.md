@@ -37,7 +37,7 @@ helps the agent *find* the answer would be overstated — the honest search-effi
 present in the environment, so a capable model can always recover it. But *which fix to apply* is
 not in the environment. Rolling back the offending deploy clears the symptom and destroys an
 in-flight job; reducing the client's pool size in place clears it just as fast and lets the job
-finish. Nothing in the metrics, logs, configs or topology distinguishes them.
+finish. The environment never reveals the two facts that decide it: that the interrupted job is **non-resumable**, and that change control **rejects** expanding shared capacity. Both are consequences you can only learn by having acted before — and empirically the memoryless agent had the campaign-start log line in context in all five trials and still chose rollback all five times.
 
 The cold agent chose rollback 5/5 — the textbook instinct. The warm agent chose the in-place fix
 5/5, having learned from one prior incident on entirely different services what the rollback cost.
@@ -62,9 +62,41 @@ already work out. It is the only route to knowledge the environment never expose
 
 None of these names a service. All three were written by the consolidation pass, unedited.
 
+## Per-trial data
+
+Verbatim stdout from the run that produced the table above.
+
+```
+COLD ARM — 5 trials of INC-002, memory OFF
+  cold trial 1/5: ok   13 calls    46.0s    36395 tok  1 red-herring  0 recalled
+  cold trial 2/5: ok   19 calls    60.0s    57674 tok  1 red-herring  0 recalled
+  cold trial 3/5: ok    9 calls    33.1s    23071 tok  0 red-herring  0 recalled
+  cold trial 4/5: ok   11 calls    41.8s    31891 tok  0 red-herring  0 recalled
+  cold trial 5/5: ok   12 calls    44.4s    33343 tok  0 red-herring  0 recalled
+
+TEACH — one run of INC-001, then consolidate that run only
+  INC-001: 16 calls, correct=True
+  consolidated 16 episodes -> 3 lessons
+
+WARM ARM — 5 trials of INC-002, memory ON
+  warm trial 1/5: ok   10 calls    33.8s    27531 tok  0 red-herring  3 recalled
+  warm trial 2/5: ok    9 calls    31.6s    25877 tok  0 red-herring  3 recalled
+  warm trial 3/5: ok    9 calls    30.1s    24840 tok  0 red-herring  3 recalled
+  warm trial 4/5: ok    8 calls    29.7s    21626 tok  0 red-herring  3 recalled
+  warm trial 5/5: ok    9 calls    37.0s    23268 tok  0 red-herring  3 recalled
+```
+
+Note `ok` in every row: that column is the DIAGNOSIS, and it is correct in all ten trials. The arms
+separate only on the remediation, which is the point of the design.
+
+Wall-clock figures are from a local run. The same code on Cloud Run is slower under concurrency —
+the service is deliberately capped at 2 instances — so a run issued against the hosted URL while
+others are in flight will take longer. Tool counts and the remediation choice are unaffected.
+
+
 ## Caveats
 
-- n=5 per arm. The remediation result is 0/5 vs 5/5, which is unambiguous; the step-count deltas
+- n=5 per arm, single seed, one model version (`gemini-3.7-flash`, global endpoint). The remediation result is 0/5 vs 5/5, which is unambiguous; the step-count deltas
   carry real uncertainty and are reported with spread rather than as point estimates.
 - Successful warm trials reward the salience of lessons they used, so later warm trials see
   marginally higher salience than earlier ones. With a three-lesson store this can only affect

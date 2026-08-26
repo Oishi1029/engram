@@ -82,7 +82,7 @@ must restart from zero.</li>
 <li><code>reduce_client_pool_in_place</code> clears it just as fast and lets the job finish.</li>
 </ul>
 
-<p>Nothing in the metrics, logs, configs or topology distinguishes them. You can only know by having
+<p>The environment never reveals the two facts that decide it: that the interrupted job is **non-resumable**, and that change control **rejects** expanding shared capacity. Both are consequences you can only learn by having acted before — and empirically the memoryless agent had the campaign-start log line in context in all five trials and still chose rollback all five times. You can only know by having
 done it before.</p>
 
 <p>The memoryless agent chose rollback <span class="bad">5/5</span> &mdash; the textbook instinct
@@ -226,10 +226,13 @@ aggregate metrics. It is glaring the moment you read one consolidated lesson out
 <p>It would have been easy to make these numbers bigger. Three things I deliberately did not do:</p>
 
 <ul>
-<li><strong>The agent&rsquo;s prompt stays domain-naive.</strong> It is never told that recent deploys
-are prime suspects, or that a degraded dependency may be a symptom rather than a cause. Those are
-precisely the lessons memory is supposed to supply. An earlier version had them in the system prompt
-&mdash; which handed the agent its memory for free and left the memory system nothing to contribute.</li>
+<li><strong>The agent is never handed the lesson memory exists to supply.</strong> Nothing in its
+prompt or its tools says that a rollback has a cost, or which remediation to prefer. An earlier
+version <em>did</em> put investigative heuristics in the system prompt &mdash; which handed the agent
+its memory for free and left the memory system nothing to contribute. To be precise about what
+remains: the tool docstrings describe what each tool returns, including that config carries a
+<code>_previous</code> block. Both arms see that identically, and stripping it would cripple the
+memoryless agent and inflate the delta &mdash; which is the same sin in the other direction.</li>
 <li><strong>Consolidation never sees the control arm.</strong> Bug 3 was a violation of this by
 accident; reintroducing it on purpose would be fraud.</li>
 <li><strong>The teaching incident shares no surface detail with the test incident.</strong> Different

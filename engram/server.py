@@ -112,16 +112,34 @@ def index() -> HTMLResponse:
         for m in mems
     ) or "<tr><td colspan='5' class='empty'>No consolidated memories yet.</td></tr>"
 
-    run_rows = "".join(
-        f"<tr><td>{esc(r.get('incident_id'))}</td>"
-        f"<td>{'ON' if r.get('memory_enabled') else 'OFF'}</td>"
-        f"<td class='n'>{esc(r.get('tool_calls'))}</td>"
-        f"<td class='n'>{esc(r.get('wall_seconds'))}s</td>"
-        f"<td class='n'>{esc(r.get('total_tokens'))}</td>"
-        f"<td class='{'ok' if r.get('correct') else 'bad'}'>"
-        f"{'correct' if r.get('correct') else 'wrong'}</td></tr>"
-        for r in recent
-    ) or "<tr><td colspan='6' class='empty'>No runs recorded yet.</td></tr>"
+    def run_row(r: dict) -> str:
+        # 🔴 The verdict column must key on `resolved`, not `correct`.
+        # `correct` is the DIAGNOSIS flag, and the benchmark reports it at 5/5 in both arms — so a
+        # page driven by it showed memory making no difference, which is the opposite of what this
+        # project measured. `resolved` requires the right diagnosis AND a remediation that did not
+        # destroy an in-flight job.
+        timed_out = bool(r.get("timed_out"))
+        if timed_out:
+            verdict, cls = "timed out", "warn"
+        elif r.get("resolved"):
+            verdict, cls = "resolved", "ok"
+        else:
+            verdict, cls = "not resolved", "bad"
+        remediation = r.get("chosen_remediation") or ("—" if timed_out else "none")
+        return (
+            f"<tr><td>{esc(r.get('incident_id'))}</td>"
+            f"<td>{'ON' if r.get('memory_enabled') else 'OFF'}</td>"
+            f"<td class='n'>{esc(r.get('tool_calls'))}</td>"
+            f"<td class='n'>{esc(r.get('wall_seconds'))}s</td>"
+            f"<td class='{'ok' if r.get('correct') else 'bad'}'>"
+            f"{'correct' if r.get('correct') else 'wrong'}</td>"
+            f"<td><code>{esc(remediation)}</code></td>"
+            f"<td class='{cls}'>{verdict}</td></tr>"
+        )
+
+    run_rows = "".join(run_row(r) for r in recent) or (
+        "<tr><td colspan='7' class='empty'>No runs recorded yet.</td></tr>"
+    )
 
     return HTMLResponse(f"""<!doctype html><meta charset="utf-8">
 <title>engram — durable agent memory</title>
@@ -137,7 +155,11 @@ def index() -> HTMLResponse:
  th {{ font-size: 12px; text-transform: uppercase; letter-spacing: .04em; opacity: .65; }}
  td.n {{ text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }}
  td.cue {{ max-width: 22rem; }}
- .ok {{ color:#188038; }} .bad {{ color:#c5221f; }}
+ .ok {{ color:#188038; font-weight:600; }} .bad {{ color:#c5221f; font-weight:600; }}
+ .warn {{ color:#a06000; }}
+ .headline {{ background: rgba(24,128,56,.10); border:1px solid rgba(24,128,56,.35);
+              border-radius:8px; padding:.85rem 1.1rem; margin:1rem 0 1.5rem; font-size:14.5px; }}
+ .headline b {{ font-size:16px; }}
  .empty {{ opacity:.6; font-style: italic; }}
  code {{ background: rgba(128,128,128,.16); padding: .1rem .35rem; border-radius: 4px; }}
 </style>
@@ -149,8 +171,20 @@ def index() -> HTMLResponse:
 <table><tr><th>When</th><th>Then</th><th>Salience</th><th>Retrieved</th><th>Useful</th></tr>
 {mem_rows}</table>
 
+<div class="headline">
+<b>Measured: incident resolved 0/5 &rarr; 5/5 with memory.</b><br>
+Both arms diagnose the root cause correctly 5/5 &mdash; the model is strong and memory cannot claim
+credit for that. The difference is what each one then <i>does</i>: without memory it rolls back the
+offending deploy, which clears the symptom and destroys an in-flight job. Tool calls &minus;31%,
+tokens &minus;32%.
+<a href="https://github.com/Oishi1029/engram/blob/main/results/benchmark-2026-08-26.md">Full protocol and caveats &rarr;</a>
+</div>
+
 <h2>Recent runs</h2>
-<table><tr><th>Incident</th><th>Memory</th><th>Tool calls</th><th>Wall</th><th>Tokens</th><th>Result</th></tr>
+<p style="opacity:.7;font-size:13px;margin-top:-.4rem">
+<b>Diagnosis</b> = did it find the root cause. <b>Resolved</b> = did it also apply a fix that
+didn't destroy a running job. Only the second one separates the arms.</p>
+<table><tr><th>Incident</th><th>Memory</th><th>Tool calls</th><th>Wall</th><th>Diagnosis</th><th>Remediation applied</th><th>Outcome</th></tr>
 {run_rows}</table>
 
 <p style="opacity:.65;font-size:13px">
