@@ -1,0 +1,41 @@
+# --- Secrets: never commit. This file is in the FIRST commit deliberately. ---
+*.json.key
+service-account*.json
+gcp-key*.json
+credentials.json
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+.gcp/
+secrets/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Local state / emulator ---
+.firestore-emulator/
+*.log
+local_state/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# --- Build ---
+dist/
+build/
