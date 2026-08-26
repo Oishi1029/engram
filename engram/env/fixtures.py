@@ -144,7 +144,20 @@ class Incident:
     # The answer. Used only for grading a completed run — never exposed to the agent.
     root_cause_service: str
     root_cause_summary: str
-    correct_remediation_keywords: list[str]
+
+    # 🔴 THE PART THE ENVIRONMENT DOES NOT REVEAL.
+    # Every incident here can be resolved three ways. Rolling back the offending deploy is the
+    # textbook instinct and it DOES relieve the symptom — but it aborts an in-flight job that then
+    # has to restart from zero. Reducing the client's pool size in place relieves it just as well
+    # and lets the job continue.
+    #
+    # Nothing in the metrics, logs, configs or topology says so. It is only knowable from having
+    # done it before and seen what happened. That is what makes this a memory problem rather than
+    # a search problem: a capable model can always FIND the root cause in this environment, so
+    # memory could only ever save it a few steps. It cannot deduce an operational consequence that
+    # the environment never exposes.
+    correct_remediation: str
+    remediation_outcomes: dict[str, str]
 
     # The service whose metrics look alarming but which is a symptom, not a cause.
     red_herring_service: str
@@ -175,7 +188,27 @@ INC_001 = Incident(
         "checkout-api — which has not deployed in three days and is unchanged — is starved. "
         "payments-api looks slow only because checkout-api holds its calls open."
     ),
-    correct_remediation_keywords=["user-profile", "concurrency", "pool_size", "rollback", "backfill"],
+    correct_remediation="reduce_client_pool_in_place",
+    remediation_outcomes={
+        "rollback_deploy": (
+            "APPLIED. Connection pressure on redis-session cleared within 90 seconds and "
+            "checkout p99 returned to baseline. HOWEVER the loyalty-migration backfill was "
+            "terminated mid-run and cannot resume from a checkpoint; it must restart from zero, "
+            "costing roughly 4 hours and missing its compliance window. Incident review "
+            "concluded the rollback was avoidable: reducing the client's pool size in place "
+            "would have relieved the contention just as fast while letting the job continue."
+        ),
+        "reduce_client_pool_in_place": (
+            "APPLIED. user-profile-api's redis.pool_size lowered 150 -> 30 without a restart. "
+            "Connection pressure cleared within 2 minutes, checkout p99 returned to baseline, "
+            "and the backfill continued at reduced throughput. Clean resolution, no work lost."
+        ),
+        "raise_datastore_capacity": (
+            "REJECTED by change control. Raising maxclients on redis-session requires restarting "
+            "the shared cluster, which would drop sessions for all six consumers. Not permitted "
+            "during an active incident."
+        ),
+    },
     red_herring_service="payments-api",
     metrics={
         "checkout-api": {
@@ -194,8 +227,8 @@ INC_001 = Incident(
             "connections_active": 200, "connections_max": 200,
             "connection_wait_ms_p99": 7400,
             "note": (
-                "Server-side latency is healthy. Connections are pinned at the maximum. "
-                "Per-client attribution is not exported by this cluster."
+                "Server-side latency is healthy. Per-client connection attribution is not "
+                "exported by this cluster."
             ),
         },
         "user-profile-api": {
@@ -273,26 +306,33 @@ INC_001 = Incident(
                 "deployed_at": "2026-08-26T13:58:00Z",
                 "version": "v2026.08.26-4",
                 "author": "team-identity",
-                "change_summary": "Raise worker_concurrency 20 -> 120 and redis.pool_size 25 -> 150 for profile backfill",
+                "change_summary": "Enable bulk profile backfill job for the loyalty migration",
             }
         ],
         "cart-service": [
             {
-                "deployed_at": "2026-08-25T10:05:00Z",
-                "version": "v2026.08.25-1",
+                "deployed_at": "2026-08-26T13:41:00Z",
+                "version": "v2026.08.26-2",
                 "author": "team-storefront",
-                "change_summary": "Fix currency rounding on cart totals",
+                "change_summary": "Fix currency rounding on cart totals for JPY",
             }
         ],
         "auth-gateway": [
             {
-                "deployed_at": "2026-08-19T08:20:00Z",
-                "version": "v2026.08.19-1",
+                "deployed_at": "2026-08-26T13:22:00Z",
+                "version": "v2026.08.26-1",
                 "author": "team-identity",
-                "change_summary": "Rotate JWT signing key",
+                "change_summary": "Rotate JWT signing key and shorten token TTL to 30m",
             }
         ],
-        "recommendation-api": [],
+        "recommendation-api": [
+            {
+                "deployed_at": "2026-08-26T13:50:00Z",
+                "version": "v2026.08.26-3",
+                "author": "team-discovery",
+                "change_summary": "Add seasonal boost to ranking weights",
+            }
+        ],
         "session-reaper": [
             {
                 "deployed_at": "2026-08-22T16:45:00Z",
@@ -354,7 +394,27 @@ INC_002 = Incident(
         "ago — cannot acquire one. opensearch CPU is elevated for an unrelated reindex and is a "
         "dead end."
     ),
-    correct_remediation_keywords=["notification", "batch_concurrency", "pool_size", "rollback"],
+    correct_remediation="reduce_client_pool_in_place",
+    remediation_outcomes={
+        "rollback_deploy": (
+            "APPLIED. Connection pressure on postgres-primary cleared within 2 minutes and "
+            "search p99 returned to baseline. HOWEVER the autumn campaign send was terminated "
+            "part-way through 4.8M recipients with no resumable checkpoint; it must restart from "
+            "the beginning, and roughly 1.2M recipients will receive a duplicate message. "
+            "Incident review concluded the rollback was avoidable."
+        ),
+        "reduce_client_pool_in_place": (
+            "APPLIED. notification-worker's db.pool_size lowered 220 -> 25 without a restart. "
+            "Connection pressure cleared within 3 minutes, search p99 returned to baseline, and "
+            "the campaign send continued at reduced throughput. Clean resolution, no work lost "
+            "and no duplicate sends."
+        ),
+        "raise_datastore_capacity": (
+            "REJECTED by change control. Raising max_connections on postgres-primary requires a "
+            "restart of the shared primary, which would interrupt all five dependent services. "
+            "Not permitted during an active incident."
+        ),
+    },
     red_herring_service="opensearch-cluster",
     metrics={
         "search-api": {
@@ -373,8 +433,8 @@ INC_002 = Incident(
             "connections_active": 300, "connections_max": 300,
             "connection_wait_ms_p99": 4900,
             "note": (
-                "Server-side query latency is healthy. Connections are pinned at the maximum. "
-                "Per-client attribution is not exported by this instance."
+                "Server-side query latency is healthy. CPU elevated. Per-client connection "
+                "attribution is not exported by this instance."
             ),
         },
         "notification-worker": {
@@ -423,12 +483,36 @@ INC_002 = Incident(
         ],
         "opensearch-cluster": [],
         "postgres-primary": [],
+        "inventory-api": [
+            {
+                "deployed_at": "2026-08-27T08:47:00Z",
+                "version": "v2026.08.27-2",
+                "author": "team-supply",
+                "change_summary": "Add composite index on SKU attributes",
+            }
+        ],
+        "payments-api": [
+            {
+                "deployed_at": "2026-08-27T09:02:00Z",
+                "version": "v2026.08.27-3",
+                "author": "team-payments",
+                "change_summary": "Update TLS cipher suite and bump http client timeout to 8s",
+            }
+        ],
+        "user-profile-api": [
+            {
+                "deployed_at": "2026-08-27T07:31:00Z",
+                "version": "v2026.08.27-4",
+                "author": "team-identity",
+                "change_summary": "Fix timezone handling in profile export",
+            }
+        ],
         "notification-worker": [
             {
                 "deployed_at": "2026-08-27T09:09:00Z",
                 "version": "v2026.08.27-1",
                 "author": "team-comms",
-                "change_summary": "Raise batch_concurrency 10 -> 200 and db.pool_size 15 -> 220 for autumn campaign send",
+                "change_summary": "Scale out campaign send pipeline ahead of the autumn launch",
             }
         ],
     },
@@ -442,6 +526,18 @@ INC_002 = Incident(
         },
         "opensearch-cluster": {"shards": 6, "replicas": 1},
         "postgres-primary": {"max_connections": 300},
+        "inventory-api": {
+            "worker_concurrency": 30, "db.pool_size": 45,
+            "_previous": {"worker_concurrency": 30, "db.pool_size": 45},
+        },
+        "payments-api": {
+            "worker_concurrency": 40, "db.pool_size": 30, "http.timeout_ms": 8000,
+            "_previous": {"worker_concurrency": 40, "db.pool_size": 30, "http.timeout_ms": 5000},
+        },
+        "user-profile-api": {
+            "worker_concurrency": 20, "db.pool_size": 8,
+            "_previous": {"worker_concurrency": 20, "db.pool_size": 8},
+        },
         "notification-worker": {
             "batch_concurrency": 200,
             "db.pool_size": 220,

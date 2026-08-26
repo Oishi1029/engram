@@ -172,6 +172,12 @@ async def run_incident(
     proposed_service = (proposal.get("root_cause_service") or "").strip()
     correct = proposed_service == incident.root_cause_service
 
+    chosen_remediation = (proposal.get("remediation") or "").strip()
+    remediation_correct = chosen_remediation == incident.correct_remediation
+    # Both must be right for the incident to be genuinely resolved. Diagnosing correctly and then
+    # applying a fix that destroys an in-flight job is not a success.
+    resolved = correct and remediation_correct
+
     wasted = sum(
         1 for c in ctx.call_log if c["args"].get("service") == incident.red_herring_service
     )
@@ -195,8 +201,13 @@ async def run_incident(
         "proposed_root_cause_service": proposed_service,
         "expected_root_cause_service": incident.root_cause_service,
         "correct": correct,
-        "proposed_action": proposal.get("action", ""),
+        "chosen_remediation": chosen_remediation,
+        "expected_remediation": incident.correct_remediation,
+        "remediation_correct": remediation_correct,
+        "resolved": resolved,
+        "outcome": (ctx.applied or {}).get("outcome", ""),
         "proposed_reasoning": proposal.get("root_cause", ""),
+        "rationale": proposal.get("rationale", ""),
         "timed_out": timed_out,
     }
     store.write_run(record)
@@ -205,16 +216,19 @@ async def run_incident(
     # that makes retrieval get better rather than merely staying warm.
     if memory.surfaced_ids:
         store.touch_retrieved(memory.surfaced_ids)
-        if correct:
+        if resolved:
             store.reward(memory.surfaced_ids)
 
     if verbose:
         print("-" * 78)
         print(
-            f"RESULT  {'CORRECT' if correct else 'WRONG'}  "
-            f"| proposed {proposed_service or '(nothing)'} "
-            f"| expected {incident.root_cause_service}"
+            f"RESULT  diagnosis {'OK ' if correct else 'WRONG'} "
+            f"({proposed_service or 'nothing'}) "
+            f"| remediation {'OK ' if remediation_correct else 'WRONG'} "
+            f"({chosen_remediation or 'nothing'}, expected {incident.correct_remediation})"
         )
+        if ctx.applied:
+            print(f"        outcome: {ctx.applied['outcome'][:160]}")
         print(
             f"        {ctx.tool_call_count} tool calls "
             f"| {elapsed:.1f}s "
@@ -225,13 +239,17 @@ async def run_incident(
 
 
 def _summarise_observation(ctx: ToolContext, tool_name: str) -> str:
-    """A compact description of what the last call returned, for the episodic record."""
+    """What the last call actually returned, for the episodic record.
+
+    This is what consolidation reads, so it has to carry facts rather than shapes. In particular
+    it carries the outcome text from `apply_remediation`, which is the only knowledge in this
+    environment that could not have been deduced from investigation.
+    """
     if not ctx.call_log:
         return ""
     last = ctx.call_log[-1]
-    keys = last.get("result_keys")
-    target = last["args"].get("service", "")
-    return f"{tool_name}({target}) -> {keys}"
+    target = last["args"].get("service") or last["args"].get("root_cause_service") or ""
+    return f"{tool_name}({target}) -> {last.get('summary', '')}"
 
 
 def run_incident_sync(incident_id: str, **kwargs: Any) -> dict[str, Any]:

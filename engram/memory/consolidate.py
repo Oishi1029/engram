@@ -55,6 +55,19 @@ Concretely:
        "When latency spikes shortly after a deploy, compare what that deploy changed against the
         service's connection-pool configuration before investigating the downstream datastore."
 
+🔴 PRIORITISE OUTCOMES ABOVE ALL ELSE.
+The trace ends with the agent APPLYING a remediation and receiving a report of what actually
+happened. That report is the single most valuable thing in the trace, because it contains
+operational consequences that NO amount of investigation could have predicted — they are not in
+any metric, log, config or dependency graph. If a remediation resolved the symptom but caused
+collateral damage, that is the most important lesson available and it MUST be captured, phrased so
+it applies to any future incident of the same shape:
+  GOOD: "Rolling back a deploy that raised a client's connection pool relieves datastore
+         contention, but also terminates any long-running job that deploy started, forcing a
+         restart from zero. Prefer lowering the offending client's pool size in place: it relieves
+         the contention just as quickly and lets the job continue."
+Do not phrase it as a fact about one service. Phrase it as an operating rule.
+
 Also capture DEAD ENDS. Knowing which investigation path wasted steps is as valuable as knowing
 which one worked, because avoiding it is what makes the next run shorter:
   GOOD: "A downstream dependency showing elevated p99 while its error rate and CPU stay normal is

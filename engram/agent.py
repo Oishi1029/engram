@@ -41,9 +41,11 @@ You have a limited number of tool calls, so choose each one deliberately. Do not
 service in the estate.
 
 FINISHING
-When the evidence supports a conclusion, call `propose_remediation` exactly once, naming the
-service where the cause actually lives, the causal chain, and a concrete fix. Do not call it
-speculatively, and do not stop without calling it.
+When the evidence supports a conclusion, call `apply_remediation` exactly once. You must name the
+service where the cause actually lives, the causal chain, and which of the available remediations
+to apply. Applying a remediation makes a real change to a production estate, so choose it on the
+evidence and explain your reasoning. Do not call it speculatively, and do not stop without
+calling it.
 
 Before each tool call, state in one short sentence what you are checking and why — name the
 hypothesis you are testing, not merely the action you are taking. Those sentences become the

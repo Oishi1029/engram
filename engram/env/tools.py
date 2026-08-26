@@ -7,9 +7,15 @@ Design notes that matter for judging:
   structured returns keep the agent's reasoning auditable in the terminal during the live demo.
 * Tool calls are counted. Step count is the headline metric the second run has to beat, so the
   counter lives here rather than being inferred from a transcript afterwards.
-* `propose_remediation` is the only tool with side effects, and it terminates the run. An agent
-  that never proposes anything fails the task; this is what makes it a Taskmaster workflow rather
-  than a chatbot.
+* `apply_remediation` is the only tool with side effects, and it terminates the run. An agent that
+  never applies anything fails the task — this is a workflow that takes action, not a chatbot that
+  describes one.
+* Crucially, `apply_remediation` RETURNS WHAT HAPPENED, including operational side effects that no
+  amount of investigation could have predicted. Rolling back the offending deploy relieves the
+  symptom and destroys an in-flight job; reducing the client pool in place relieves it just as well
+  and lets the job finish. Nothing in the metrics, logs, configs or topology distinguishes them.
+  That outcome text is the raw material consolidation turns into a durable operational lesson, and
+  it is the reason memory can beat a capable model here rather than merely saving it a few steps.
 """
 
 from __future__ import annotations
@@ -27,9 +33,12 @@ class ToolContext:
     incident: Incident
     call_log: list[dict[str, Any]] = field(default_factory=list)
     proposal: dict[str, Any] | None = None
+    applied: dict[str, Any] | None = None
 
     def _record(self, name: str, args: dict[str, Any], result: Any) -> None:
-        self.call_log.append({"tool": name, "args": args, "result_keys": _shape(result)})
+        self.call_log.append(
+            {"tool": name, "args": args, "summary": _summarise(result)}
+        )
 
     @property
     def tool_call_count(self) -> int:
@@ -45,12 +54,29 @@ class ToolContext:
         return seen
 
 
-def _shape(result: Any) -> Any:
+def _summarise(result: Any, limit: int = 600) -> str:
+    """A readable digest of a tool result, for the episodic record.
+
+    🔴 This used to return only the result's KEYS. That was a mistake with consequences: episodes
+    are the raw material consolidation reasons over, and "get_service_metrics(redis-session) ->
+    ['cpu_pct', 'connections_active', ...]" contains no facts to generalise from. Worse, the
+    outcome text returned by `apply_remediation` — the one thing in this environment that cannot
+    be deduced and therefore the only thing genuinely worth remembering — was being discarded
+    entirely before it ever reached the consolidation model.
+    """
     if isinstance(result, dict):
-        return sorted(result)
-    if isinstance(result, list):
-        return f"list[{len(result)}]"
-    return type(result).__name__
+        parts = []
+        for k, v in result.items():
+            if k in ("service", "applied"):
+                continue
+            text = ", ".join(str(x) for x in v) if isinstance(v, list) else str(v)
+            parts.append(f"{k}={text}")
+        out = "; ".join(parts)
+    elif isinstance(result, list):
+        out = "; ".join(str(x) for x in result)
+    else:
+        out = str(result)
+    return out if len(out) <= limit else out[: limit - 1] + "\u2026"
 
 
 def build_tools(ctx: ToolContext) -> list:
@@ -170,24 +196,48 @@ def build_tools(ctx: ToolContext) -> list:
         ctx._record("get_dependencies", args, result)
         return result
 
-    def propose_remediation(root_cause_service: str, root_cause: str, action: str) -> dict:
-        """Conclude the investigation by proposing a fix. This ENDS the run — call it exactly once,
-        and only when the evidence supports it.
+    def apply_remediation(
+        root_cause_service: str, root_cause: str, remediation: str, rationale: str
+    ) -> dict:
+        """Resolve the incident by APPLYING a remediation. This ENDS the run — call it exactly
+        once, and only when the evidence supports your diagnosis.
+
+        This performs a real change on the estate and returns what actually happened, including
+        any operational side effects.
 
         Args:
-            root_cause_service: The service where the root cause actually lives (not the service
-                that reported symptoms, unless they are the same).
+            root_cause_service: The service where the root cause actually lives — not the service
+                that reported symptoms, unless they are the same.
             root_cause: One or two sentences explaining the causal chain.
-            action: The concrete remediation to apply.
+            remediation: Exactly one of:
+                "rollback_deploy"             - roll the offending deploy back to its previous
+                                                version, reverting all of its changes.
+                "reduce_client_pool_in_place" - lower the offending service's connection-pool size
+                                                at runtime, without a restart or a rollback.
+                "raise_datastore_capacity"    - raise the shared datastore's connection limit.
+            rationale: Why you chose this remediation over the alternatives.
         """
+        choice = (remediation or "").strip()
         args = {
             "root_cause_service": root_cause_service,
             "root_cause": root_cause,
-            "action": action,
+            "remediation": choice,
+            "rationale": rationale,
         }
+        outcome = ctx.incident.remediation_outcomes.get(choice)
+        if outcome is None:
+            result = {
+                "applied": False,
+                "error": f"Unknown remediation {choice!r}.",
+                "valid_options": sorted(ctx.incident.remediation_outcomes),
+            }
+            ctx._record("apply_remediation", args, result)
+            return result
+
         ctx.proposal = dict(args)
-        result = {"accepted": True, "recorded": args}
-        ctx._record("propose_remediation", args, result)
+        ctx.applied = {"remediation": choice, "outcome": outcome}
+        result = {"applied": True, "remediation": choice, "outcome": outcome}
+        ctx._record("apply_remediation", args, result)
         return result
 
     return [
@@ -197,5 +247,5 @@ def build_tools(ctx: ToolContext) -> list:
         get_recent_deploys,
         get_service_config,
         get_dependencies,
-        propose_remediation,
+        apply_remediation,
     ]
