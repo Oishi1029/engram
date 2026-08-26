@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The failure mode of agent memory isn't a crash. It's a plausible number.</title>
+<meta name="description" content="Four bugs in an agentic memory system, none of which threw an exception. All four would have shipped as 'memory doesn't help much'.">
+<style>
+ :root{color-scheme:light dark;--bg:#fff;--fg:#1a1a1a;--dim:#5f6368;--rule:#e0e0e0;--accent:#1a56b0;--code:#f4f4f6;--warn:#a50e0e;--ok:#0d652d}
+ @media(prefers-color-scheme:dark){:root{--bg:#16181c;--fg:#e6e6e6;--dim:#9aa0a6;--rule:#2c2f36;--accent:#7aa7f0;--code:#20232a;--warn:#f28b82;--ok:#81c995}}
+ *{box-sizing:border-box}
+ body{background:var(--bg);color:var(--fg);margin:0;font:17px/1.68 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+ .wrap{max-width:44rem;margin:0 auto;padding:3.5rem 1.4rem 6rem}
+ h1{font-size:2.1rem;line-height:1.22;letter-spacing:-.02em;margin:0 0 .6rem}
+ h2{font-size:1.35rem;line-height:1.3;letter-spacing:-.01em;margin:3rem 0 .9rem;padding-top:1.4rem;border-top:1px solid var(--rule)}
+ h3{font-size:1.08rem;margin:2rem 0 .5rem}
+ .meta{color:var(--dim);font-size:.95rem;margin:0 0 2.4rem}
+ .lede{font-size:1.16rem;color:var(--dim);line-height:1.6;margin:0 0 2rem}
+ a{color:var(--accent)}
+ code{background:var(--code);padding:.12em .38em;border-radius:4px;font-size:.88em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+ pre{background:var(--code);padding:1rem 1.1rem;border-radius:8px;overflow-x:auto;font-size:.86rem;line-height:1.5}
+ pre code{background:none;padding:0}
+ blockquote{margin:1.4rem 0;padding:.2rem 0 .2rem 1.1rem;border-left:3px solid var(--rule);color:var(--dim)}
+ table{border-collapse:collapse;width:100%;margin:1.5rem 0;font-size:.94rem;display:block;overflow-x:auto}
+ th,td{text-align:left;padding:.5rem .65rem;border-bottom:1px solid var(--rule);white-space:nowrap}
+ th{font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--dim)}
+ img{max-width:100%;height:auto;border:1px solid var(--rule);border-radius:8px;margin:1.5rem 0}
+ .bad{color:var(--warn);font-weight:600}
+ .good{color:var(--ok);font-weight:600}
+ .note{background:var(--code);border-radius:8px;padding:1rem 1.2rem;margin:1.8rem 0;font-size:.95rem}
+ footer{margin-top:4rem;padding-top:1.4rem;border-top:1px solid var(--rule);color:var(--dim);font-size:.9rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>The failure mode of agent memory isn&rsquo;t a crash. It&rsquo;s a plausible number.</h1>
+<p class="meta">26 August 2026 · Bong Bin Yong · <a href="https://github.com/Oishi1029/engram">github.com/Oishi1029/engram</a></p>
+
+<p class="lede">I built an agent with durable memory in a day. It found four bugs in me. Not one of
+them threw an exception &mdash; every single one reported a number that looked entirely reasonable,
+and all four would have shipped as &ldquo;memory doesn&rsquo;t help much.&rdquo;</p>
+
+<p>The project is <strong>engram</strong>: an autonomous incident-response agent that investigates a
+production outage, takes action, and writes what it learned to Firestore. A background pass
+consolidates those raw episodes into durable operating rules, and the agent then handles a
+<em>different</em> incident better because of it.</p>
+
+<p>The interesting part isn&rsquo;t the architecture. It&rsquo;s that a memory system is unusually
+good at hiding its own defects, because almost every failure still produces output that a reasonable
+person would accept.</p>
+
+<h2>First, the thing I got wrong about what memory is for</h2>
+
+<p>My initial design had the agent diagnose the root cause of an incident, and I measured whether
+memory made it faster. The answer was: a bit. Around 13% fewer tool calls, with both arms getting
+the diagnosis right five times out of five.</p>
+
+<p>13% sounds like a result until you look at the variance. Cold runs on identical input ranged from
+8 to 19 tool calls. The effect was comfortably inside the noise.</p>
+
+<p>I spent an hour making the incident harder. More services to enumerate. A red herring whose
+metrics looked alarming. Deploy messages that described intent rather than config diffs, so the
+agent had to actually inspect configuration. Gemini 3.7 Flash kept solving it.</p>
+
+<p>Eventually the actual problem became obvious, and it was structural:</p>
+
+<blockquote>Every fact needed to diagnose the incident was already in the environment. A capable
+model can always recover it. So memory could only ever be a faster index over something the agent
+would work out anyway.</blockquote>
+
+<p>That caps the result at &ldquo;marginally faster&rdquo; no matter how hard you make the puzzle.
+Memory becomes <em>decisive</em> only when it carries knowledge the environment does not contain
+&mdash; which, it turns out, is exactly what an on-call runbook is.</p>
+
+<p>So I changed the task. The agent now has to <strong>choose and apply a fix</strong>, and gets back
+a report of what actually happened:</p>
+
+<ul>
+<li><code>rollback_deploy</code> clears the symptom <em>and terminates an in-flight job</em> that
+must restart from zero.</li>
+<li><code>reduce_client_pool_in_place</code> clears it just as fast and lets the job finish.</li>
+</ul>
+
+<p>Nothing in the metrics, logs, configs or topology distinguishes them. You can only know by having
+done it before.</p>
+
+<p>The memoryless agent chose rollback <span class="bad">5/5</span> &mdash; the textbook instinct
+&mdash; destroying a 4.8-million-recipient campaign send every time. With memory consolidated from
+<em>one prior incident on entirely different services</em>, it chose the in-place fix
+<span class="good">5/5</span>.</p>
+
+<table>
+<tr><th>metric</th><th>cold</th><th>warm</th><th>&Delta;</th></tr>
+<tr><td><strong>incident resolved</strong></td><td class="bad">0 / 5</td><td class="good">5 / 5</td><td>&mdash;</td></tr>
+<tr><td>tool calls</td><td>12.8 &plusmn; 3.8</td><td>8.8 &plusmn; 0.8</td><td>&minus;31%</td></tr>
+<tr><td>total tokens</td><td>36,475</td><td>24,628</td><td>&minus;32%</td></tr>
+<tr><td>diagnosis correct</td><td>5 / 5</td><td>5 / 5</td><td>&mdash;</td></tr>
+</table>
+
+<p>Note the last row. I&rsquo;m not going to claim memory helps the agent find the answer &mdash; it
+demonstrably doesn&rsquo;t need help. That row staying flat is what makes the first row mean
+something.</p>
+
+<h2>Bug 1: consolidation learned the exact opposite lesson</h2>
+
+<p>The teaching run rolled back a deploy. The outcome report it received began:</p>
+
+<pre><code>Connection pressure cleared within 90 seconds and checkout p99
+returned to baseline. HOWEVER the loyalty-migration backfill was
+terminated mid-run and cannot resume from a checkpoint...</code></pre>
+
+<p>Here is the rule the consolidation model then wrote, unedited:</p>
+
+<blockquote><strong>WHEN</strong> a newly deployed background worker causes datastore connection
+starvation &mdash; <strong>THEN</strong> roll back the offending worker&rsquo;s deployment
+immediately rather than attempting in-place pool resizing, <em>as in-place pool reductions will
+cause concurrency starvation and errors for running workers.</em></blockquote>
+
+<p>It anchored on the first sentence, recommended the wrong action, and then
+<strong>invented a mechanism</strong> to justify why the correct action would be harmful. That
+italicised clause is not in any input. The model made it up to make its conclusion coherent.</p>
+
+<p>The warm agent then dutifully followed this lesson 5/5. Memory had actively taught it to do the
+wrong thing, with more confidence than it had before.</p>
+
+<p>This is worse than having no memory at all, and it deserves to be stated plainly: <strong>a
+confidently wrong lesson is retrieved and trusted.</strong> An empty store makes an agent naive. A
+poisoned store makes it wrong on purpose.</p>
+
+<p>The fix was to make outcome reports lead with an explicit verdict, the way a real postmortem does
+&mdash; <code>VERDICT: WRONG REMEDIATION</code> before any description of what went right &mdash; and
+to tell the consolidation prompt that a verdict is authoritative and may never be contradicted.</p>
+
+<div class="note">The general lesson: if you ask a model to summarise an experience, the
+<em>ordering</em> of that experience is a hyperparameter. Success first, caveat second, produces a
+different lesson than the reverse. That is not a prompt-engineering nicety; it inverted a conclusion.</div>
+
+<h2>Bug 2: an off-by-one silently corrupted every episodic record</h2>
+
+<p>In Google&rsquo;s ADK, a tool call and its result arrive as <em>separate events</em>. I was
+writing an episode when I saw the call, and reading the observation from the tool log&rsquo;s most
+recent entry.</p>
+
+<p>At that moment the tool had not run yet. So every episode recorded the <strong>previous</strong>
+step&rsquo;s observation against the current step&rsquo;s action &mdash; a slightly scrambled but
+entirely readable history.</p>
+
+<p>Worse: the final <code>apply_remediation</code> episode never captured its outcome at all, because
+the run ends before another call arrives to displace it. That outcome is the only knowledge in this
+environment that cannot be deduced by investigation. It is the <em>entire point</em>. Consolidation
+had never once seen it.</p>
+
+<p>The visible symptom was a log line reading <code>consolidated 7 episodes</code> after an 11-call
+run. Which looks fine. Numbers go down when you filter things.</p>
+
+<h2>Bug 3: my experimental-hygiene filter discarded the data it existed to protect</h2>
+
+<p>The benchmark runs the same incident twice &mdash; once cold as a control, once warm. The control
+run writes episodes like any other run, and consolidating those would let the warm run learn the
+answer to the exact incident it&rsquo;s about to be scored on. So consolidation is restricted to the
+teaching run only.</p>
+
+<p>I implemented that restriction like this:</p>
+
+<pre><code>docs = (collection
+        .where("consolidated", "==", False)
+        .limit(50)          # &larr; limit applied here
+        .stream())
+return [e for e in docs if e.run_id in run_ids]   # &larr; filter applied here</code></pre>
+
+<p>The control arm writes its episodes <em>first</em>. By the time the teaching run happened, ~57
+episodes were already queued ahead of it, so most of the teaching run fell outside the window
+&mdash; including its last step, which is the one that matters.</p>
+
+<p>It reported <code>consolidated 7 episodes</code> on a 12-step run and <strong>survived two full
+benchmark runs looking completely normal</strong>. The filter that existed purely to keep the
+experiment honest was quietly destroying it.</p>
+
+<h2>Bug 4: retrieval fired at the only moment it could not work</h2>
+
+<p>Originally I retrieved memory once, before the agent&rsquo;s first move, using the text of the
+alert.</p>
+
+<p>But consolidated lessons are phrased in the vocabulary of <em>evidence</em>: &ldquo;shared
+datastore&rdquo;, &ldquo;maximum connection capacity&rdquo;, &ldquo;pool exhausted&rdquo;. An alert
+says <em>&ldquo;search latency spiked to 5.4s&rdquo;</em>. None of that vocabulary exists yet.</p>
+
+<p>The single most valuable lesson in the store was unmatchable at the one instant I ever looked for
+it. The fix &mdash; re-retrieving before every planning step, cued by evidence gathered so far
+&mdash; is also just a better model of recall. You don&rsquo;t remember everything you know about
+connection pools when the pager goes off. You remember it when you see <code>pool timeout</code> in a
+log.</p>
+
+<h2>What ties them together</h2>
+
+<p>A crash tells you where to look. Every one of these bugs produced a number instead:</p>
+
+<table>
+<tr><th>bug</th><th>what it reported</th></tr>
+<tr><td>inverted lesson</td><td>a fluent, confident, plausible operating rule</td></tr>
+<tr><td>episodic off-by-one</td><td><code>consolidated 7 episodes</code></td></tr>
+<tr><td>filter dropped data</td><td><code>consolidated 7 episodes</code></td></tr>
+<tr><td>single-shot retrieval</td><td><code>1 memory recalled</code>, &minus;10% steps</td></tr>
+</table>
+
+<p>Every one is a number a tired person accepts at 2am. And they all point the same direction: the
+system appears to work, slightly less well than hoped. The most likely outcome is that you conclude
+your <em>idea</em> was mediocre, when in fact your <em>implementation</em> was broken.</p>
+
+<p>Three things helped, and I&rsquo;d reach for all of them again:</p>
+
+<ol>
+<li><strong>An offline test asserting the central claim directly.</strong> Mine takes half a second,
+needs no cloud account, and asserts that a lesson learned on incident A retrieves on unseen incident
+B, above deliberately high-salience distractors. If that goes red there is no transfer and nothing
+else matters.</li>
+<li><strong>Reconciling counts you did not think to reconcile.</strong> &ldquo;12 calls produced 12
+episodes&rdquo; is a boring assertion that would have caught two of these four.</li>
+<li><strong>Reading what the model actually wrote, every time.</strong> Bug 1 is invisible in
+aggregate metrics. It is glaring the moment you read one consolidated lesson out loud.</li>
+</ol>
+
+<h2>And the guards I refused to remove</h2>
+
+<p>It would have been easy to make these numbers bigger. Three things I deliberately did not do:</p>
+
+<ul>
+<li><strong>The agent&rsquo;s prompt stays domain-naive.</strong> It is never told that recent deploys
+are prime suspects, or that a degraded dependency may be a symptom rather than a cause. Those are
+precisely the lessons memory is supposed to supply. An earlier version had them in the system prompt
+&mdash; which handed the agent its memory for free and left the memory system nothing to contribute.</li>
+<li><strong>Consolidation never sees the control arm.</strong> Bug 3 was a violation of this by
+accident; reintroducing it on purpose would be fraud.</li>
+<li><strong>The teaching incident shares no surface detail with the test incident.</strong> Different
+service, datastore, culprit, red herring. Replaying one incident twice demonstrates a cache.</li>
+</ul>
+
+<p>Crippling the memoryless agent would have produced a much larger delta and a completely worthless
+number &mdash; and anyone who read the prompt would see it.</p>
+
+<img src="architecture.png" alt="engram architecture: Cloud Run hosting a Google ADK agent calling Gemini 3.7 Flash on Vertex AI, with Firestore holding episodic and semantic memory tiers and Cloud Scheduler driving background consolidation.">
+
+<h2>Try it</h2>
+
+<p>The code is at <a href="https://github.com/Oishi1029/engram">github.com/Oishi1029/engram</a>, the
+service is live at
+<a href="https://engram-921012904912.asia-southeast1.run.app">engram-921012904912.asia-southeast1.run.app</a>,
+and the benchmark that produced the table above reruns with one command. The README documents the
+whole setup, including the IAM incantation new Google Cloud projects now need before
+<code>gcloud run deploy --source</code> will work &mdash; which fails with a Cloud Storage 403 that
+has nothing obvious to do with the actual problem.</p>
+
+<footer>
+<p>I created this piece of content for the purposes of entering the
+<a href="https://allthingsagentichackathon.devpost.com/">All Things Agentic Hackathon</a>
+(Google Cloud, August 2026).</p>
+<p>engram was newly created during the Submission Period (3&ndash;31 August 2026). Its memory
+architecture was informed by my own prior open-source project
+<a href="https://github.com/Oishi1029/instar">instar</a>, disclosed as pre-existing work of mine; no
+source code from it was copied in. AI coding assistants were used throughout development, as
+expressly permitted by the Contest Rules. All incident data in the project is synthetic.</p>
+</footer>
+
+</div>
+</body>
+</html>
