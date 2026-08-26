@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from contextlib import aclosing
 from typing import Any
 
 from google.adk.runners import InMemoryRunner
@@ -92,32 +93,42 @@ async def run_incident(
     pending_thought = ""
     timed_out = False
 
+    # 🔴 `aclosing` is not decoration. The hard caps below BREAK out of this async generator,
+    # and abandoning an async generator mid-flight leaves ADK's OpenTelemetry span token and the
+    # underlying HTTP transport in a corrupted state. The failure then surfaces much later, on the
+    # *next* unrelated model call, as "Cannot send a request, as the client has been closed" —
+    # which is a genuinely misleading place for it to appear. `aclosing` guarantees the generator
+    # is closed in its own context on every exit path, including a break.
+    stream = adk.run_async(
+        user_id="oncall",
+        session_id=session.id,
+        new_message=types.Content(
+            role="user", parts=[types.Part(text=_task_prompt(incident))]
+        ),
+    )
     try:
-        async for event in adk.run_async(
-            user_id="oncall",
-            session_id=session.id,
-            new_message=types.Content(
-                role="user", parts=[types.Part(text=_task_prompt(incident))]
-            ),
-        ):
-            usage = getattr(event, "usage_metadata", None)
-            if usage:
-                prompt_tokens += getattr(usage, "prompt_token_count", 0) or 0
-                output_tokens += getattr(usage, "candidates_token_count", 0) or 0
+        async with aclosing(stream) as events:
+            async for event in events:
+                usage = getattr(event, "usage_metadata", None)
+                if usage:
+                    prompt_tokens += getattr(usage, "prompt_token_count", 0) or 0
+                    output_tokens += getattr(usage, "candidates_token_count", 0) or 0
 
-            content = getattr(event, "content", None)
-            for part in getattr(content, "parts", None) or []:
-                if getattr(part, "text", None):
-                    pending_thought = part.text.strip()
-                    if verbose and pending_thought:
-                        print(f"  · {pending_thought}")
+                content = getattr(event, "content", None)
+                for part in getattr(content, "parts", None) or []:
+                    if getattr(part, "text", None):
+                        pending_thought = part.text.strip()
+                        if verbose and pending_thought:
+                            print(f"  \u00b7 {pending_thought}")
 
-                call = getattr(part, "function_call", None)
-                if call is not None:
+                    call = getattr(part, "function_call", None)
+                    if call is None:
+                        continue
                     step += 1
                     args = dict(call.args or {})
                     if verbose:
-                        print(f"  [{step}] {call.name}({', '.join(f'{k}={v!r}' for k, v in args.items())})")
+                        rendered = ", ".join(f"{k}={v!r}" for k, v in args.items())
+                        print(f"  [{step}] {call.name}({rendered})")
                     store.write_episode(
                         Episode(
                             run_id=run_id,
@@ -131,20 +142,20 @@ async def run_incident(
                     )
                     pending_thought = ""
 
-            # 🔴 Hard caps. See config.py — these are a cost control, not tuning.
-            if step >= CONFIG.max_tool_calls:
-                if verbose:
-                    print(f"  !! tool-call cap ({CONFIG.max_tool_calls}) reached, stopping")
-                break
-            if (prompt_tokens + output_tokens) >= CONFIG.max_tokens_per_run:
-                if verbose:
-                    print("  !! token cap reached, stopping")
-                break
-            if time.time() - started > CONFIG.run_timeout_seconds:
-                timed_out = True
-                if verbose:
-                    print("  !! run timeout reached, stopping")
-                break
+                # 🔴 Hard caps. See config.py — these are a cost control, not tuning.
+                if step >= CONFIG.max_tool_calls:
+                    if verbose:
+                        print(f"  !! tool-call cap ({CONFIG.max_tool_calls}) reached, stopping")
+                    break
+                if (prompt_tokens + output_tokens) >= CONFIG.max_tokens_per_run:
+                    if verbose:
+                        print("  !! token cap reached, stopping")
+                    break
+                if time.time() - started > CONFIG.run_timeout_seconds:
+                    timed_out = True
+                    if verbose:
+                        print("  !! run timeout reached, stopping")
+                    break
     finally:
         await adk.close()
 

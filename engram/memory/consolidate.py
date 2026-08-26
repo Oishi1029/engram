@@ -22,6 +22,7 @@ what the second run has to prove on camera.
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 from typing import Any
@@ -92,13 +93,26 @@ def _format_episodes(episodes: list[Episode]) -> str:
     return "\n\n".join(blocks)
 
 
+@functools.lru_cache(maxsize=1)
 def _client() -> genai.Client:
-    """A Vertex AI-backed GenAI client.
+    """A Vertex AI-backed GenAI client, created once and reused.
 
-    Vertex rather than the Gemini Developer API, for two independent reasons: it keeps every
-    call inside the Google Cloud project (so deployment is provable from one console screen),
-    and Google excludes "Gemini API in AI Studio" from free-trial credit while Vertex is not on
-    that exclusion list.
+    Vertex rather than the Gemini Developer API, for two independent reasons: it keeps every call
+    inside the Google Cloud project (so deployment is provable from one console screen), and Google
+    excludes "Gemini API in AI Studio" from free-trial credit while Vertex is not on that list.
+
+    🔴 THE CACHING IS A CORRECTNESS FIX, NOT AN OPTIMISATION.
+    This was previously called inline as `_client().models.generate_content(...)`, which makes the
+    Client a temporary: nothing holds a reference to it once `.models` is bound. The SDK's
+    `SyncHttpxClient` defines a `__del__` that closes the underlying socket, so the client could be
+    collected and closed *while its own request was in flight*, surfacing as
+
+        RuntimeError: Cannot send a request, as the client has been closed.
+
+    It reproduced only after several agent runs had raised enough garbage-collection pressure,
+    which made it look like state corruption from the ADK runner rather than a dangling reference.
+    Holding the client for the process lifetime removes the failure entirely, and reusing one
+    connection pool is what you want on Cloud Run in any case.
     """
     return genai.Client(
         vertexai=True,
