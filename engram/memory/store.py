@@ -78,21 +78,37 @@ class MemoryStore:
         consolidation to the teaching run keeps the comparison honest.
         """
         limit = limit or CONFIG.consolidation_batch
-        docs = (
-            self._db.collection(CONFIG.episodic_collection)
-            .where(filter=firestore.FieldFilter("consolidated", "==", False))
-            .limit(limit)
-            .stream()
-        )
-        out: list[Episode] = []
+        col = self._db.collection(CONFIG.episodic_collection)
+        query = col.where(filter=firestore.FieldFilter("consolidated", "==", False))
+
+        # 🔴 The run filter MUST be pushed into the query, not applied after the limit.
+        # It previously fetched `limit` unconsolidated episodes and filtered them in Python. Since
+        # the control arm writes its episodes first, the teaching run's episodes fell outside that
+        # window — a 12-step teaching run consolidated as 7 episodes, and the step-12
+        # apply_remediation outcome, the only thing worth learning, was always among the ones
+        # dropped. It looked like a plausible number rather than a bug.
+        if run_ids is not None:
+            if not run_ids:
+                return []
+            # Firestore's `in` accepts at most 30 values; chunk and merge above that.
+            chunks = [run_ids[i : i + 30] for i in range(0, len(run_ids), 30)]
+            out: list[Episode] = []
+            known = {f for f in Episode.__dataclass_fields__}
+            for chunk in chunks:
+                docs = query.where(
+                    filter=firestore.FieldFilter("run_id", "in", chunk)
+                ).limit(limit).stream()
+                for doc in docs:
+                    d = doc.to_dict() or {}
+                    out.append(Episode(**{k: v for k, v in d.items() if k in known}))
+            out.sort(key=lambda e: (e.run_id, e.step))
+            return out[:limit]
+
         known = {f for f in Episode.__dataclass_fields__}
-        for doc in docs:
-            d = doc.to_dict() or {}
-            ep = Episode(**{k: v for k, v in d.items() if k in known})
-            if run_ids is not None and ep.run_id not in run_ids:
-                continue
-            out.append(ep)
-        return out
+        return [
+            Episode(**{k: v for k, v in (doc.to_dict() or {}).items() if k in known})
+            for doc in query.limit(limit).stream()
+        ]
 
     def mark_consolidated(self, episode_ids: Iterable[str]) -> None:
         batch = self._db.batch()
