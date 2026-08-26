@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import statistics as stats
 import sys
 from pathlib import Path
@@ -86,11 +87,24 @@ def assert_control_arm_is_quarantined(store: MemoryStore, cold_runs: list) -> No
         )
     print(f"  guard: 0 of {len(ids)} control runs are eligible for consolidation \u2713")
 
+# Vertex AI enforces a burst quota. Back-to-back trials can trip it, and a trial that spends its
+# life in retry backoff records as a failure rather than as a rate limit — which corrupts the arm it
+# lands in. Pacing costs wall-clock and buys measurements that mean something.
+TRIAL_PAUSE_SECONDS = float(os.environ.get("ENGRAM_TRIAL_PAUSE", "20"))
+
+
 async def arm(name: str, n: int, store: MemoryStore, use_memory: bool) -> list[dict[str, Any]]:
     out = []
     for i in range(1, n + 1):
+        if i > 1:
+            await asyncio.sleep(TRIAL_PAUSE_SECONDS)
         rec = await run_incident(TARGET, store=store, use_memory=use_memory, verbose=False)
-        flag = "ok " if rec["correct"] else "MISS"
+        if rec.get("timed_out"):
+            flag = "TIMEOUT"          # infrastructure, not the agent — excluded from the summary
+        elif rec["correct"]:
+            flag = "ok "
+        else:
+            flag = "MISS"
         print(
             f"  {name} trial {i}/{n}: {flag} "
             f"{rec['tool_calls']:>3} calls  {rec['wall_seconds']:>6.1f}s  "
@@ -107,10 +121,10 @@ async def main(n: int) -> int:
     print(f"Wiping memory: {store.wipe()}\n")
 
     print(f"COLD ARM — {n} trials of {TARGET}, memory OFF")
-    cold = await arm("cold", n, store, use_memory=False)
+    cold_raw = await arm("cold", n, store, use_memory=False)
 
     print(f"\nTEACH — one run of {TEACH}, then consolidate that run only")
-    assert_control_arm_is_quarantined(store, cold)
+    assert_control_arm_is_quarantined(store, cold_raw)
     teach = await run_incident(TEACH, store=store, use_memory=True, verbose=False)
     print(f"  {TEACH}: {teach['tool_calls']} calls, correct={teach['correct']}")
     summary = consolidate(store, run_ids=[teach["run_id"]])
@@ -120,11 +134,23 @@ async def main(n: int) -> int:
         print(f"        THEN {lesson['lesson']}")
 
     print(f"\nWARM ARM — {n} trials of {TARGET}, memory ON")
-    warm = await arm("warm", n, store, use_memory=True)
+    warm_raw = await arm("warm", n, store, use_memory=True)
+
+    # 🔴 Drop trials that hit the run timeout. A trial killed while waiting out a Vertex AI burst
+    # limit tells you about quota, not about the agent — and scoring it as a failed run would
+    # flatter whichever arm happened not to hit the limit. Reported, never silently discarded.
+    cold = [r for r in cold_raw if not r.get("timed_out")]
+    warm = [r for r in warm_raw if not r.get("timed_out")]
+    dropped = (len(cold_raw) - len(cold)) + (len(warm_raw) - len(warm))
+    if dropped:
+        print(f"\n  !! {dropped} trial(s) excluded: hit the run timeout mid-retry (rate limit, "
+              f"not agent behaviour). Reporting on cold n={len(cold)}, warm n={len(warm)}.")
+    if not cold or not warm:
+        raise SystemExit("ABORT: an arm has no usable trials. Re-run when quota has recovered.")
 
     # ---------------------------------------------------------------- report
     print(f"\n{'=' * 86}")
-    print(f"  RESULT — {TARGET}, {n} trials per arm")
+    print(f"  RESULT — {TARGET}, cold n={len(cold)} / warm n={len(warm)}")
     print(f"{'=' * 86}")
     print(f"  {'metric':<24}{'COLD':>26}{'WARM':>26}{'mean Δ':>10}")
     print(f"  {'-' * 84}")
@@ -142,7 +168,7 @@ async def main(n: int) -> int:
     ):
         c_ok = sum(1 for r in cold if r.get(key))
         w_ok = sum(1 for r in warm if r.get(key))
-        print(f"  {label:<24}{f'{c_ok}/{n}':>26}{f'{w_ok}/{n}':>26}")
+        print(f"  {label:<24}{f'{c_ok}/{len(cold)}':>26}{f'{w_ok}/{len(warm)}':>26}")
 
     def counts(rows):
         seen: dict[str, int] = {}

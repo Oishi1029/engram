@@ -51,9 +51,16 @@ class Config:
     # agents saturated the burst quota and a run died mid-flight, recovering ~15s later. Unhandled,
     # that ends a demo recording or a judge's reproduction on an error that was never a real fault.
     # Retries happen at the transport layer so a single step is retried, not the whole run.
-    retry_attempts: int = _env_int("ENGRAM_RETRY_ATTEMPTS", 5)
-    retry_initial_delay: float = 2.0
-    retry_max_delay: float = 60.0
+    # 🔴 Tuned deliberately SHORT. An earlier setting (5 attempts, 60s max delay) could stall a
+    # single run for 400+ seconds waiting out a burst limit. That is bad twice over: it would
+    # overrun a 4-minute demo recording, and in the benchmark it manufactured fake data points —
+    # one cold trial recorded 0 tool calls and 1,130 tokens over 484 seconds, having spent its
+    # entire life in backoff before hitting the run timeout. Scored naively that reads as "the
+    # memoryless agent failed", which inflates the very result being measured.
+    # Better to fail fast and visibly than to stall and be silently counted as a failure.
+    retry_attempts: int = _env_int("ENGRAM_RETRY_ATTEMPTS", 3)
+    retry_initial_delay: float = 1.0
+    retry_max_delay: float = 8.0
 
     # --- 🔴 Hard safety caps. See module docstring. ---
     max_steps: int = _env_int("ENGRAM_MAX_STEPS", 15)
