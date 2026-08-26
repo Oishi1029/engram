@@ -191,22 +191,30 @@ INC_001 = Incident(
     correct_remediation="reduce_client_pool_in_place",
     remediation_outcomes={
         "rollback_deploy": (
-            "APPLIED. Connection pressure on redis-session cleared within 90 seconds and "
-            "checkout p99 returned to baseline. HOWEVER the loyalty-migration backfill was "
-            "terminated mid-run and cannot resume from a checkpoint; it must restart from zero, "
-            "costing roughly 4 hours and missing its compliance window. Incident review "
-            "concluded the rollback was avoidable: reducing the client's pool size in place "
-            "would have relieved the contention just as fast while letting the job continue."
+            "VERDICT: WRONG REMEDIATION. Resolved the symptom, caused serious collateral damage.\n"
+            "Connection pressure on redis-session cleared within 90 seconds and checkout p99 "
+            "returned to baseline. But the rollback also terminated the loyalty-migration "
+            "backfill mid-run. It cannot resume from a checkpoint and must restart from zero, "
+            "costing roughly 4 hours and missing its compliance window.\n"
+            "INCIDENT REVIEW: this rollback was avoidable. Rolling back a deploy reverts "
+            "EVERYTHING that deploy did, including starting a long-running job — so it is the "
+            "wrong instrument when the only problem is one configuration value. The preferred "
+            "remediation was reduce_client_pool_in_place, which would have relieved the "
+            "contention just as quickly while letting the job run to completion."
         ),
         "reduce_client_pool_in_place": (
-            "APPLIED. user-profile-api's redis.pool_size lowered 150 -> 30 without a restart. "
-            "Connection pressure cleared within 2 minutes, checkout p99 returned to baseline, "
-            "and the backfill continued at reduced throughput. Clean resolution, no work lost."
+            "VERDICT: CORRECT REMEDIATION. Clean resolution, no collateral damage.\n"
+            "user-profile-api's redis.pool_size was lowered 150 -> 30 at runtime with no restart "
+            "and no rollback. Connection pressure cleared within 2 minutes, checkout p99 returned "
+            "to baseline, and the loyalty-migration backfill continued at reduced throughput and "
+            "completed inside its window. No work lost."
         ),
         "raise_datastore_capacity": (
-            "REJECTED by change control. Raising maxclients on redis-session requires restarting "
-            "the shared cluster, which would drop sessions for all six consumers. Not permitted "
-            "during an active incident."
+            "VERDICT: NOT PERMITTED. Rejected by change control, incident still open.\n"
+            "Raising maxclients on redis-session requires restarting the shared cluster, which "
+            "would drop sessions for all six of its consumers. Expanding shared capacity to "
+            "accommodate one misconfigured client is also treated as masking the fault rather "
+            "than fixing it."
         ),
     },
     red_herring_service="payments-api",
@@ -397,22 +405,26 @@ INC_002 = Incident(
     correct_remediation="reduce_client_pool_in_place",
     remediation_outcomes={
         "rollback_deploy": (
-            "APPLIED. Connection pressure on postgres-primary cleared within 2 minutes and "
-            "search p99 returned to baseline. HOWEVER the autumn campaign send was terminated "
-            "part-way through 4.8M recipients with no resumable checkpoint; it must restart from "
-            "the beginning, and roughly 1.2M recipients will receive a duplicate message. "
-            "Incident review concluded the rollback was avoidable."
+            "VERDICT: WRONG REMEDIATION. Resolved the symptom, caused serious collateral damage.\n"
+            "Connection pressure on postgres-primary cleared within 2 minutes and search p99 "
+            "returned to baseline. But the rollback also terminated the autumn campaign send "
+            "part-way through 4.8M recipients, with no resumable checkpoint. It must restart from "
+            "the beginning, and roughly 1.2M recipients will receive a duplicate message.\n"
+            "INCIDENT REVIEW: this rollback was avoidable. The preferred remediation was "
+            "reduce_client_pool_in_place."
         ),
         "reduce_client_pool_in_place": (
-            "APPLIED. notification-worker's db.pool_size lowered 220 -> 25 without a restart. "
-            "Connection pressure cleared within 3 minutes, search p99 returned to baseline, and "
-            "the campaign send continued at reduced throughput. Clean resolution, no work lost "
-            "and no duplicate sends."
+            "VERDICT: CORRECT REMEDIATION. Clean resolution, no collateral damage.\n"
+            "notification-worker's db.pool_size was lowered 220 -> 25 at runtime with no restart "
+            "and no rollback. Connection pressure cleared within 3 minutes, search p99 returned "
+            "to baseline, and the campaign send continued at reduced throughput. No work lost and "
+            "no duplicate sends."
         ),
         "raise_datastore_capacity": (
-            "REJECTED by change control. Raising max_connections on postgres-primary requires a "
-            "restart of the shared primary, which would interrupt all five dependent services. "
-            "Not permitted during an active incident."
+            "VERDICT: NOT PERMITTED. Rejected by change control, incident still open.\n"
+            "Raising max_connections on postgres-primary requires restarting the shared primary, "
+            "interrupting all five dependent services. Expanding shared capacity to accommodate "
+            "one misconfigured client is also treated as masking the fault rather than fixing it."
         ),
     },
     red_herring_service="opensearch-cluster",

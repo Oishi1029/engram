@@ -55,6 +55,19 @@ Concretely:
        "When latency spikes shortly after a deploy, compare what that deploy changed against the
         service's connection-pool configuration before investigating the downstream datastore."
 
+🔴 A VERDICT IN AN OUTCOME REPORT IS AUTHORITATIVE. NEVER CONTRADICT IT.
+An outcome report that begins "VERDICT: WRONG REMEDIATION" means that action was WRONG, even if
+the same report also says the symptom cleared quickly. Clearing the symptom is not success if the
+report describes collateral damage. You must NEVER write a lesson recommending an action whose
+recorded verdict was WRONG or NOT PERMITTED, and you must never invent a drawback for the action
+the report names as preferred.
+
+This instruction exists because an earlier version of this prompt produced exactly that failure:
+given a rollback whose report opened with "cleared within 90 seconds" and then described a
+destroyed job, the model anchored on the first sentence, recommended rollback as the correct fix,
+and fabricated a mechanism for why the genuinely-correct remediation would be harmful. A single
+confidently-wrong lesson is worse than no memory at all, because it is retrieved and trusted.
+
 🔴 PRIORITISE OUTCOMES ABOVE ALL ELSE.
 The trace ends with the agent APPLYING a remediation and receiving a report of what actually
 happened. That report is the single most valuable thing in the trace, because it contains

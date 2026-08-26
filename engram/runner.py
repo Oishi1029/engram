@@ -99,6 +99,7 @@ async def run_incident(
     prompt_tokens = output_tokens = 0
     pending_thought = ""
     timed_out = False
+    pending_calls: list[dict[str, Any]] = []
 
     # 🔴 `aclosing` is not decoration. The hard caps below BREAK out of this async generator,
     # and abandoning an async generator mid-flight leaves ADK's OpenTelemetry span token and the
@@ -128,26 +129,43 @@ async def run_incident(
                         if verbose and pending_thought:
                             print(f"  \u00b7 {pending_thought}")
 
+                    # 🔴 A tool call and its result arrive in SEPARATE events. Writing the episode
+                    # here, on the call, and reading the observation from the tool log would record
+                    # the PREVIOUS step's result against this step — and would never capture the
+                    # final apply_remediation outcome at all, because the run ends before another
+                    # call arrives. That outcome is the single most valuable thing in the trace, so
+                    # calls are buffered and the episode is written when its response comes back.
                     call = getattr(part, "function_call", None)
-                    if call is None:
-                        continue
-                    step += 1
-                    args = dict(call.args or {})
-                    if verbose:
-                        rendered = ", ".join(f"{k}={v!r}" for k, v in args.items())
-                        print(f"  [{step}] {call.name}({rendered})")
-                    store.write_episode(
-                        Episode(
-                            run_id=run_id,
-                            incident_id=incident.incident_id,
-                            step=step,
-                            thought=pending_thought or "(no stated rationale)",
-                            tool=call.name,
-                            tool_args=args,
-                            observation_summary=_summarise_observation(ctx, call.name),
+                    if call is not None:
+                        step += 1
+                        args = dict(call.args or {})
+                        if verbose:
+                            rendered = ", ".join(f"{k}={v!r}" for k, v in args.items())
+                            print(f"  [{step}] {call.name}({rendered})")
+                        pending_calls.append(
+                            {
+                                "step": step,
+                                "tool": call.name,
+                                "args": args,
+                                "thought": pending_thought or "(no stated rationale)",
+                            }
                         )
-                    )
-                    pending_thought = ""
+                        pending_thought = ""
+
+                    response = getattr(part, "function_response", None)
+                    if response is not None and pending_calls:
+                        pending = pending_calls.pop(0)
+                        store.write_episode(
+                            Episode(
+                                run_id=run_id,
+                                incident_id=incident.incident_id,
+                                step=pending["step"],
+                                thought=pending["thought"],
+                                tool=pending["tool"],
+                                tool_args=pending["args"],
+                                observation_summary=_summarise_response(response),
+                            )
+                        )
 
                 # 🔴 Hard caps. See config.py — these are a cost control, not tuning.
                 if step >= CONFIG.max_tool_calls:
@@ -238,18 +256,21 @@ async def run_incident(
     return record
 
 
-def _summarise_observation(ctx: ToolContext, tool_name: str) -> str:
-    """What the last call actually returned, for the episodic record.
+def _summarise_response(response: Any, limit: int = 900) -> str:
+    """Render a tool response into the episodic record.
 
-    This is what consolidation reads, so it has to carry facts rather than shapes. In particular
-    it carries the outcome text from `apply_remediation`, which is the only knowledge in this
-    environment that could not have been deduced from investigation.
+    This is what consolidation reads, so it must carry facts rather than shapes. Above all it
+    carries the outcome text from `apply_remediation` — the only knowledge in this environment
+    that could not have been deduced by investigation, and therefore the only thing genuinely
+    worth remembering.
     """
-    if not ctx.call_log:
-        return ""
-    last = ctx.call_log[-1]
-    target = last["args"].get("service") or last["args"].get("root_cause_service") or ""
-    return f"{tool_name}({target}) -> {last.get('summary', '')}"
+    payload = getattr(response, "response", None)
+    if isinstance(payload, dict):
+        parts = [f"{k}={v}" for k, v in payload.items() if k not in ("service",)]
+        text = "; ".join(parts)
+    else:
+        text = str(payload)
+    return text if len(text) <= limit else text[: limit - 1] + "\u2026"
 
 
 def run_incident_sync(incident_id: str, **kwargs: Any) -> dict[str, Any]:

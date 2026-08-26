@@ -111,9 +111,24 @@ async def main(n: int) -> int:
         delta = f"{(wm - cm) / cm * 100:+.0f}%" if cm else ("0%" if wm == 0 else "n/a")
         print(f"  {label:<24}{describe(c):>26}{describe(w):>26}{delta:>10}")
 
-    c_ok = sum(1 for r in cold if r["correct"])
-    w_ok = sum(1 for r in warm if r["correct"])
-    print(f"  {'root cause correct':<24}{f'{c_ok}/{n}':>26}{f'{w_ok}/{n}':>26}")
+    for key, label in (
+        ("correct", "diagnosis correct"),
+        ("remediation_correct", "remediation correct"),
+        ("resolved", "FULLY RESOLVED"),
+    ):
+        c_ok = sum(1 for r in cold if r.get(key))
+        w_ok = sum(1 for r in warm if r.get(key))
+        print(f"  {label:<24}{f'{c_ok}/{n}':>26}{f'{w_ok}/{n}':>26}")
+
+    def counts(rows):
+        seen: dict[str, int] = {}
+        for r in rows:
+            seen[r.get("chosen_remediation") or "(none)"] = (
+                seen.get(r.get("chosen_remediation") or "(none)", 0) + 1
+            )
+        return ", ".join(f"{k}×{v}" for k, v in sorted(seen.items(), key=lambda kv: -kv[1]))
+
+    print(f"  {'remediation chosen':<24}{counts(cold):>26}{counts(warm):>26}")
     print(f"  {'memories recalled':<24}{'0':>26}"
           f"{describe([r['memories_used_count'] for r in warm]):>26}")
     print(f"{'=' * 86}")
