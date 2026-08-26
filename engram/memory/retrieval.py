@@ -27,7 +27,7 @@ import math
 import re
 
 from engram.config import CONFIG
-from engram.memory.store import SemanticMemory
+from engram.memory.records import SemanticMemory
 
 _WORD = re.compile(r"[a-z0-9_.\-]+")
 
@@ -41,8 +41,30 @@ _STOP = {
 }
 
 
+def _stem(token: str) -> str:
+    """Crude suffix stripping, and crude is the right amount here.
+
+    Consolidated lessons are written by a model, so word forms vary unpredictably: an incident
+    reports latency "spiked" while the lesson generalises about latency "spikes". Without this
+    they are different tokens and the lesson does not fire — which would silently break transfer,
+    the one property the whole system exists to provide.
+
+    A real stemmer (Porter, Snowball) would be more correct and would also mean a dependency and
+    a corpus for a 200-item store. What matters is only that both sides stem *consistently*, so
+    even a wrong-but-stable stem ("postgres" -> "postgr") still matches itself.
+    """
+    for suffix in ("ing", "ed", "es", "s"):
+        if len(token) - len(suffix) >= 4 and token.endswith(suffix):
+            return token[: -len(suffix)]
+    return token
+
+
 def _tokens(text: str) -> set[str]:
-    return {t for t in _WORD.findall(text.lower()) if t not in _STOP and len(t) > 2}
+    return {
+        _stem(t)
+        for t in _WORD.findall(text.lower())
+        if t not in _STOP and len(t) > 2
+    }
 
 
 def score(query: str, memory: SemanticMemory) -> float:

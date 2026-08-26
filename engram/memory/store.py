@@ -31,70 +31,14 @@ degrades.
 
 from __future__ import annotations
 
-import time
-import uuid
-from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable
 
 from google.cloud import firestore
 
 from engram.config import CONFIG
+from engram.memory.records import Episode, SemanticMemory
 
-
-# --------------------------------------------------------------------------------------
-# Records
-# --------------------------------------------------------------------------------------
-
-
-@dataclass
-class Episode:
-    """One step the agent took, written as it happened."""
-
-    run_id: str
-    incident_id: str
-    step: int
-    thought: str
-    tool: str
-    tool_args: dict[str, Any]
-    observation_summary: str
-    created_at: float = field(default_factory=time.time)
-    consolidated: bool = False
-    episode_id: str = field(default_factory=lambda: uuid.uuid4().hex)
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass
-class SemanticMemory:
-    """A durable, generalised lesson distilled from one or more episodes.
-
-    `cue` is what the lesson is indexed on — the situation it applies to. `lesson` is the
-    transferable content. Keeping them separate is what lets a lesson learned on one service
-    fire on a different one.
-    """
-
-    cue: str
-    lesson: str
-    source_run_ids: list[str]
-    salience: float = 1.0
-    times_retrieved: int = 0
-    times_useful: int = 0
-    created_at: float = field(default_factory=time.time)
-    last_used_at: float = 0.0
-    memory_id: str = field(default_factory=lambda: uuid.uuid4().hex)
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "SemanticMemory":
-        known = {f for f in cls.__dataclass_fields__}
-        return cls(**{k: v for k, v in d.items() if k in known})
-
-    @property
-    def text(self) -> str:
-        return f"WHEN {self.cue}\nTHEN {self.lesson}"
+__all__ = ["Episode", "SemanticMemory", "MemoryStore"]
 
 
 # --------------------------------------------------------------------------------------

@@ -30,7 +30,8 @@ from google import genai
 from google.genai import types
 
 from engram.config import CONFIG
-from engram.memory.store import Episode, MemoryStore, SemanticMemory
+from engram.memory.records import Episode, SemanticMemory
+from engram.memory.store import MemoryStore
 
 log = logging.getLogger(__name__)
 
