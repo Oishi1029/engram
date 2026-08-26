@@ -51,19 +51,24 @@ agent's episodic record, so make them substantive.
 """
 
 
-def build_agent(tools: list, memory_block: str) -> LlmAgent:
+def build_agent(tools: list, before_model_callback) -> LlmAgent:
     """Construct the agent for one run.
 
-    `memory_block` is prepended to the instruction. On a cold run it states that memory is empty;
-    on a warm run it carries the consolidated lessons. That substitution is the entire difference
-    between the two runs — same model, same tools, same instruction, same incident.
+    Memory is injected through `before_model_callback` rather than baked into the instruction at
+    construction time. That is what makes retrieval PROGRESSIVE: the callback runs before every
+    planning step, so a lesson can surface at the moment the evidence for it appears, rather than
+    only at the moment the alert arrives. See `engram/memory/progressive.py` for why retrieving
+    once at the start measurably did not work.
+
+    The instruction below is identical on cold and warm runs. The callback is the only difference.
     """
     return LlmAgent(
         name="incident_responder",
         model=CONFIG.model,
         description="Investigates a production incident and proposes a remediation.",
-        instruction=f"{memory_block}\n\n---\n\n{INSTRUCTION}",
+        instruction=INSTRUCTION,
         tools=tools,
+        before_model_callback=before_model_callback,
         generate_content_config=types.GenerateContentConfig(
             temperature=0.1,
             max_output_tokens=2048,

@@ -26,12 +26,13 @@ from typing import Any
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 
-from engram.agent import build_agent
+from engram.agent import INSTRUCTION, build_agent
 from engram.config import CONFIG
 from engram.env.fixtures import Incident, get_incident
 from engram.env.tools import ToolContext, build_tools
-from engram.memory import retrieval
-from engram.memory.store import Episode, MemoryStore
+from engram.memory.progressive import ProgressiveMemory
+from engram.memory.records import Episode
+from engram.memory.store import MemoryStore
 
 APP_NAME = "engram"
 
@@ -67,24 +68,30 @@ async def run_incident(
     run_id = f"run-{uuid.uuid4().hex[:8]}"
     started = time.time()
 
-    # --- retrieve -------------------------------------------------------------
-    retrieved: list = []
-    if use_memory:
-        retrieved = retrieval.retrieve(_situation_query(incident), store.all_semantic())
-        if retrieved:
-            store.touch_retrieved([m.memory_id for m, _ in retrieved])
-    memory_block = retrieval.format_for_prompt(retrieved)
+    # --- memory ------------------------------------------------------------
+    # Progressive: this object re-retrieves before every planning step, cued by the evidence the
+    # agent has gathered so far. Retrieving once up front measurably did not work — see
+    # engram/memory/progressive.py.
+    memory = ProgressiveMemory(
+        store=store,
+        base_instruction=INSTRUCTION,
+        alert_text=_situation_query(incident),
+        enabled=use_memory,
+        verbose=verbose,
+    )
 
     if verbose:
         print(f"\n{'=' * 78}")
-        print(f"RUN {run_id}  |  incident {incident.incident_id}  |  memory={'ON' if use_memory else 'OFF'}")
+        print(
+            f"RUN {run_id}  |  incident {incident.incident_id}  |  "
+            f"memory={'ON' if use_memory else 'OFF'}  "
+            f"|  {len(memory.available)} lesson(s) available"
+        )
         print(f"{'=' * 78}")
-        print(memory_block)
-        print("-" * 78)
 
     # --- run ------------------------------------------------------------------
     ctx = ToolContext(incident=incident)
-    agent = build_agent(build_tools(ctx), memory_block)
+    agent = build_agent(build_tools(ctx), memory.before_model)
     adk = InMemoryRunner(agent=agent, app_name=APP_NAME)
     session = await adk.session_service.create_session(app_name=APP_NAME, user_id="oncall")
 
@@ -174,8 +181,10 @@ async def run_incident(
         "incident_id": incident.incident_id,
         "started_at": started,
         "memory_enabled": use_memory,
-        "memories_used": [m.memory_id for m, _ in retrieved],
-        "memories_used_count": len(retrieved),
+        "memories_used": memory.surfaced_ids,
+        "memories_used_count": len(memory.surfaced),
+        "memories_available": len(memory.available),
+        "recall_events": memory.recall_events,
         "tool_calls": ctx.tool_call_count,
         "wall_seconds": round(elapsed, 2),
         "prompt_tokens": prompt_tokens,
@@ -194,8 +203,10 @@ async def run_incident(
 
     # A lesson that was in context during a correct run earns salience. This is the feedback loop
     # that makes retrieval get better rather than merely staying warm.
-    if correct and retrieved:
-        store.reward([m.memory_id for m, _ in retrieved])
+    if memory.surfaced_ids:
+        store.touch_retrieved(memory.surfaced_ids)
+        if correct:
+            store.reward(memory.surfaced_ids)
 
     if verbose:
         print("-" * 78)
