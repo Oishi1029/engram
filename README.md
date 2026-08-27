@@ -134,6 +134,10 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Every command below assumes that virtualenv is **active** — your prompt should show `(.venv)`. On
+macOS a bare `python` does not exist outside one, so `python scripts/...` fails with
+`command not found: python` if you skip it or open a new terminal.
+
 ### 2. Authenticate and configure
 
 ```bash
